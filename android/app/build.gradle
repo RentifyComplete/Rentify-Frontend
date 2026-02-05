@@ -1,0 +1,87 @@
+plugins {
+    id "com.android.application"
+    id "org.jetbrains.kotlin.android"
+    id "dev.flutter.flutter-gradle-plugin"
+}
+
+// Load keystore properties
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file('key.properties')
+def useReleaseSigning = false
+
+if (keystorePropertiesFile.exists()) {
+    try {
+        keystorePropertiesFile.withInputStream { stream ->
+            keystoreProperties.load(stream)
+        }
+        useReleaseSigning = true
+        println("✅ Keystore properties loaded successfully")
+    } catch (Exception e) {
+        println("⚠️ Error loading keystore properties: ${e.message}")
+    }
+} else {
+    println("⚠️ key.properties file not found at: ${keystorePropertiesFile.absolutePath}")
+}
+
+android {
+    namespace = "com.satyamrentify.app"
+    compileSdk = 36
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+
+    kotlinOptions {
+        jvmTarget = "11"
+    }
+
+    defaultConfig {
+        applicationId = "com.satyamrentify.app"
+        minSdkVersion = flutter.minSdkVersion
+        targetSdk = 36
+        versionCode = 2
+        versionName = "2.0.0"
+        multiDexEnabled true
+
+        ndk {
+            abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86_64'
+        }
+    }
+
+    signingConfigs {
+        release {
+            if (useReleaseSigning) {
+                storeFile file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig useReleaseSigning ? signingConfigs.release : signingConfigs.debug
+            minifyEnabled false  // Disable for now to avoid issues
+            shrinkResources false
+        }
+
+        debug {
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    lint {
+        disable 'InvalidPackage'
+        checkReleaseBuilds false
+    }
+}
+
+flutter {
+    source '../..'
+}
+
+dependencies {
+    implementation "androidx.multidex:multidex:2.0.1"
+}
