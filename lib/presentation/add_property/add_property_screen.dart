@@ -8,6 +8,8 @@ import 'package:path/path.dart' as path;
 
 import '../../core/app_export.dart';
 import '../../services/auth_service.dart';
+import '../../services/cloudinary_service.dart';
+import '../../services/agreement_pdf_service.dart'; // ⭐ UPDATED: Simplified version
 import '../../providers/user_provider.dart';
 import '../Owner_dashboard/property_payment_screen.dart';
 
@@ -22,8 +24,11 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
   final _formKey = GlobalKey<FormState>();
   final ImagePicker _picker = ImagePicker();
   final AuthService _authService = AuthService();
+  final CloudinaryService _cloudinaryService = CloudinaryService();
+  final AgreementPdfService _agreementService = AgreementPdfService(); // ⭐ Simplified service
 
   List<File> _propertyImages = [];
+  File? _signatureImage; // ⭐ NEW: Signature image
 
   // Property type selection
   String _selectedPropertyType = 'Flat';
@@ -37,6 +42,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
   final List<String> _bhkOptions = ['1 BHK', '2 BHK', '3 BHK', '4 BHK', '5+ BHK'];
 
   // Form controllers
+  final TextEditingController _ownerNameController = TextEditingController(); // ⭐ NEW
   final TextEditingController _propertyNameController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _addressController = TextEditingController();
@@ -65,6 +71,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
 
   @override
   void dispose() {
+    _ownerNameController.dispose(); // ⭐ NEW
     _propertyNameController.dispose();
     _descriptionController.dispose();
     _addressController.dispose();
@@ -85,6 +92,17 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         }
       } catch (e) {
         print('⚠️ Could not delete temp file on dispose: $e');
+      }
+    }
+
+    // ⭐ NEW: Cleanup signature image
+    if (_signatureImage != null) {
+      try {
+        if (await _signatureImage!.exists()) {
+          await _signatureImage!.delete();
+        }
+      } catch (e) {
+        print('⚠️ Could not delete signature file: $e');
       }
     }
   }
@@ -143,6 +161,53 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
     }
   }
 
+  // ⭐ NEW: Pick signature image
+  Future<void> _pickSignatureImage() async {
+    try {
+      final XFile? pickedImage = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+      );
+
+      if (pickedImage == null) return;
+
+      print('📝 Picked signature image, copying to persistent storage...');
+
+      final appDir = await getApplicationDocumentsDirectory();
+      final imagesDir = Directory('${appDir.path}/property_images_temp');
+
+      if (!await imagesDir.exists()) {
+        await imagesDir.create(recursive: true);
+      }
+
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final originalFile = File(pickedImage.path);
+
+      if (await originalFile.exists()) {
+        final extension = path.extension(pickedImage.path);
+        final newFileName = 'signature_$timestamp$extension';
+        final newPath = '${imagesDir.path}/$newFileName';
+
+        // Delete old signature image if exists
+        if (_signatureImage != null && await _signatureImage!.exists()) {
+          await _signatureImage!.delete();
+        }
+
+        final copiedFile = await originalFile.copy(newPath);
+
+        setState(() {
+          _signatureImage = copiedFile;
+        });
+
+        print('✅ Signature image added');
+        _showSnackBar('Signature image added', Colors.green);
+      }
+    } catch (e) {
+      print('❌ Error picking signature image: $e');
+      _showSnackBar('Error picking signature image: $e', Colors.red);
+    }
+  }
+
   void _removeImage(int index) async {
     final fileToDelete = _propertyImages[index];
     setState(() {
@@ -157,6 +222,24 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
     } catch (e) {
       print('⚠️ Could not delete file: $e');
     }
+  }
+
+  // ⭐ NEW: Remove signature image
+  void _removeSignatureImage() async {
+    if (_signatureImage != null) {
+      try {
+        if (await _signatureImage!.exists()) {
+          await _signatureImage!.delete();
+        }
+      } catch (e) {
+        print('⚠️ Could not delete signature file: $e');
+      }
+    }
+
+    setState(() {
+      _signatureImage = null;
+    });
+    _showSnackBar('Signature image removed', Colors.orange);
   }
 
   void _showSnackBar(String message, Color color) {
@@ -184,6 +267,13 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
       return;
     }
 
+    // ⭐ NEW: Validate signature image
+    if (_signatureImage == null) {
+      print('❌ No signature image selected');
+      _showSnackBar('Please add owner signature image', Colors.red);
+      return;
+    }
+
     print('✅ Form validation passed');
 
     setState(() {
@@ -208,26 +298,112 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
       }
       print('✅ All images verified and ready');
 
+      // ⭐ NEW: Upload signature image to Cloudinary
+      print('');
+      print('☁️ Uploading signature image to Cloudinary...');
+
+      String? signatureUrl;
+
+      try {
+        // Upload signature image
+        signatureUrl = await _cloudinaryService.uploadImage(
+          _signatureImage!,
+          folder: 'properties/owner_documents',
+          publicId: 'signature_${currentUserId}_${DateTime.now().millisecondsSinceEpoch}',
+          tags: ['signature', 'owner_document', currentUserId],
+          context: {
+            'type': 'owner_signature',
+            'owner_id': currentUserId,
+          },
+        );
+
+        if (signatureUrl == null) {
+          throw Exception('Failed to upload signature image');
+        }
+        print('✅ Signature uploaded: $signatureUrl');
+
+      } catch (e) {
+        print('❌ Error uploading signature to Cloudinary: $e');
+        throw Exception('Failed to upload signature: $e');
+      }
+
+      // ⭐ NEW: Generate and upload rental agreement PDF
+      print('');
+      print('📄 Generating rental agreement PDF...');
+
+      String? agreementUrl;
+
+      try {
+        // Calculate security deposit (typically 1-2 months rent)
+        final rentAmount = double.tryParse(_rentController.text.trim()) ?? 0;
+        final securityDeposit = rentAmount * 2; // 2 months rent as security
+
+        // Generate PDF
+        final agreementPdf = await _agreementService.generateAgreement(
+          ownerName: _ownerNameController.text.trim(),
+          ownerSignatureUrl: signatureUrl,
+          propertyTitle: _propertyNameController.text.trim(),
+          propertyAddress: _addressController.text.trim(),
+          city: _cityController.text.trim(),
+          state: _stateController.text.trim(),
+          zipCode: _zipCodeController.text.trim(),
+          propertyType: _selectedPropertyType,
+          bhkOrBeds: _selectedPropertyType == 'PG' ? '$_numberOfBeds Beds' : _selectedBHK,
+          monthlyRent: rentAmount,
+          securityDeposit: securityDeposit,
+          ownerId: currentUserId,
+        );
+
+        print('✅ Agreement PDF generated: ${agreementPdf.path}');
+
+        // Upload PDF to Cloudinary
+        print('☁️ Uploading agreement PDF to Cloudinary...');
+
+        final agreementUploadResult = await _cloudinaryService.uploadDocument(
+          agreementPdf,
+          folder: 'properties/agreements',
+          documentType: 'rental_agreement',
+          userId: currentUserId,
+          tags: ['agreement', 'rental', currentUserId, DateTime.now().millisecondsSinceEpoch.toString()],
+          metadata: {
+            'property_id': DateTime.now().millisecondsSinceEpoch.toString(),
+            'property_title': _propertyNameController.text.trim(),
+            'owner_id': currentUserId,
+            'owner_name': _ownerNameController.text.trim(),
+          },
+        );
+
+        if (agreementUploadResult == null || agreementUploadResult['url'] == null) {
+          throw Exception('Failed to upload agreement PDF');
+        }
+
+        agreementUrl = agreementUploadResult['url'];
+        print('✅ Agreement PDF uploaded: $agreementUrl');
+
+        // Delete local PDF file
+        try {
+          if (await agreementPdf.exists()) {
+            await agreementPdf.delete();
+            print('🗑️ Deleted local agreement PDF');
+          }
+        } catch (e) {
+          print('⚠️ Could not delete local agreement PDF: $e');
+        }
+
+      } catch (e) {
+        print('❌ Error generating/uploading agreement: $e');
+        throw Exception('Failed to generate agreement: $e');
+      }
+
       List<String> selectedAmenities = _amenities.entries
           .where((entry) => entry.value)
           .map((entry) => entry.key)
           .toList();
 
-      // ⭐⭐⭐ CRITICAL PAYMENT CALCULATION LOGIC ⭐⭐⭐
-      // For PG properties:
-      // - 'rooms' = Total number of rooms (INFORMATIONAL ONLY - shown in UI)
-      // - 'beds' = Total number of beds (USED FOR PAYMENT CALCULATION)
-      // - Payment formula: beds × ₹18 per month
-      // 
-      // For Flat properties:
-      // - 'bhk' = Number of bedrooms (e.g., "2 BHK")
-      // - Payment formula: Extract number from bhk × ₹18 per month
-      //   Example: "2 BHK" → 2 × ₹18 = ₹36
-
       print('');
       print('⭐⭐⭐ PROPERTY DATA PREPARATION ⭐⭐⭐');
       print('Property Type: $_selectedPropertyType');
-      
+
       if (_selectedPropertyType == 'PG') {
         print('🏠 Rooms (informational): $_numberOfRooms');
         print('🛏️ Beds (for payment): $_numberOfBeds');
@@ -237,11 +413,14 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         final bhkNumber = int.tryParse(_selectedBHK.split(' ')[0]) ?? 1;
         print('💰 Payment calculation: $bhkNumber × ₹18 = ₹${bhkNumber * 18}');
       }
+      print('📝 Signature URL: $signatureUrl');
+      print('📄 Agreement URL: $agreementUrl');
       print('⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐');
       print('');
 
       final propertyData = {
         'id': DateTime.now().millisecondsSinceEpoch.toString(),
+        'ownerName': _ownerNameController.text.trim(), // ⭐ NEW
         'title': _propertyNameController.text.trim(),
         'price': '₹${_rentController.text.trim()}',
         'location': '${_cityController.text.trim()}, ${_stateController.text.trim()}',
@@ -249,14 +428,16 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         'ownerId': currentUserId,
         'type': _selectedPropertyType,
         'bhk': _selectedPropertyType == 'Flat' ? _selectedBHK : null,
-        'beds': _selectedPropertyType == 'PG' ? _numberOfBeds : null,   // ⭐ PAYMENT CALCULATION
-        'rooms': _selectedPropertyType == 'PG' ? _numberOfRooms : null, // ⭐ INFORMATIONAL ONLY
+        'beds': _selectedPropertyType == 'PG' ? _numberOfBeds : null,
+        'rooms': _selectedPropertyType == 'PG' ? _numberOfRooms : null,
         'amenities': selectedAmenities,
         'images': _propertyImages,
         'address': _addressController.text.trim(),
         'city': _cityController.text.trim(),
         'state': _stateController.text.trim(),
         'zipCode': _zipCodeController.text.trim(),
+        'signatureUrl': signatureUrl, // ⭐ NEW
+        'agreementUrl': agreementUrl, // ⭐ NEW: Agreement PDF URL
       };
 
       print('✅ Property data prepared for payment screen');
@@ -268,7 +449,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         MaterialPageRoute(
           builder: (context) => PropertyPaymentScreen(
             propertyData: propertyData,
-            paymentMode: 'initial', // Initial property upload
+            paymentMode: 'initial',
           ),
         ),
       );
@@ -293,6 +474,12 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
               print('⚠️ Could not delete temp file: $e');
             }
           }
+
+          // ⭐ NEW: Cleanup signature temp file
+          if (_signatureImage != null && await _signatureImage!.exists()) {
+            await _signatureImage!.delete();
+          }
+
           Navigator.pop(context, true);
         } else {
           print('❌ Payment failed or cancelled');
@@ -339,6 +526,9 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
             SizedBox(height: 3.h),
             _buildImageSection(),
             SizedBox(height: 3.h),
+            // ⭐ NEW: Owner signature and name section
+            _buildOwnerDocumentsSection(),
+            SizedBox(height: 3.h),
             _buildPropertyNameField(),
             SizedBox(height: 2.h),
             _buildDescriptionField(),
@@ -350,11 +540,11 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
               SizedBox(height: 2.h),
               _buildBedsSelection(),
               SizedBox(height: 2.h),
-              _buildPaymentInfoCard(), // ⭐ NEW: Shows payment calculation
+              _buildPaymentInfoCard(),
             ] else ...[
               _buildBHKSelection(),
               SizedBox(height: 2.h),
-              _buildPaymentInfoCard(), // ⭐ NEW: Shows payment calculation
+              _buildPaymentInfoCard(),
             ],
             SizedBox(height: 3.h),
             _buildSectionTitle('Location'),
@@ -383,7 +573,176 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
     );
   }
 
-  // ⭐ NEW: Payment info card to show calculation
+  // ⭐ NEW: Owner signature section
+  Widget _buildOwnerDocumentsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionTitle('Owner Details *'),
+        SizedBox(height: 1.h),
+        Text(
+          'Enter your name and upload your signature for verification',
+          style: AppTheme.lightTheme.textTheme.bodySmall?.copyWith(
+            color: AppTheme.lightTheme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        SizedBox(height: 2.h),
+
+        // Owner Name Text Field
+        TextFormField(
+          controller: _ownerNameController,
+          decoration: InputDecoration(
+            labelText: 'Owner Name *',
+            hintText: 'e.g., John Doe',
+            prefixIcon: Icon(Icons.person_outline),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: AppTheme.borderLight),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: AppTheme.primaryLight, width: 2),
+            ),
+          ),
+          validator: (value) {
+            if (value == null || value.trim().isEmpty) {
+              return 'Please enter owner name';
+            }
+            return null;
+          },
+        ),
+
+        SizedBox(height: 2.h),
+
+        // Signature Image
+        _buildDocumentUploadCard(
+          title: 'Owner Signature',
+          subtitle: 'Upload a photo of your signature',
+          icon: Icons.draw,
+          image: _signatureImage,
+          onPick: _pickSignatureImage,
+          onRemove: _removeSignatureImage,
+        ),
+      ],
+    );
+  }
+
+  // ⭐ NEW: Document upload card widget
+  Widget _buildDocumentUploadCard({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required File? image,
+    required VoidCallback onPick,
+    required VoidCallback onRemove,
+  }) {
+    return Container(
+      padding: EdgeInsets.all(3.w),
+      decoration: BoxDecoration(
+        color: AppTheme.lightTheme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: image != null ? Colors.green : AppTheme.borderLight,
+          width: image != null ? 2 : 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: EdgeInsets.all(2.w),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryLight.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, color: AppTheme.primaryLight, size: 6.w),
+              ),
+              SizedBox(width: 3.w),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: AppTheme.lightTheme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      subtitle,
+                      style: AppTheme.lightTheme.textTheme.bodySmall?.copyWith(
+                        color: AppTheme.lightTheme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (image != null)
+                Icon(Icons.check_circle, color: Colors.green, size: 6.w),
+            ],
+          ),
+
+          if (image != null) ...[
+            SizedBox(height: 2.h),
+            Stack(
+              children: [
+                Container(
+                  width: double.infinity,
+                  height: 20.h,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    image: DecorationImage(
+                      image: FileImage(image),
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: 1.h,
+                  right: 1.h,
+                  child: GestureDetector(
+                    onTap: onRemove,
+                    child: Container(
+                      padding: EdgeInsets.all(1.w),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(Icons.close, color: Colors.white, size: 5.w),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+
+          SizedBox(height: 2.h),
+
+          ElevatedButton.icon(
+            onPressed: onPick,
+            icon: Icon(image != null ? Icons.refresh : Icons.add_photo_alternate),
+            label: Text(image != null ? 'Change Image' : 'Upload Image'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: image != null
+                  ? Colors.grey.shade300
+                  : AppTheme.primaryLight,
+              foregroundColor: image != null
+                  ? Colors.black87
+                  : Colors.white,
+              minimumSize: Size(double.infinity, 5.h),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPaymentInfoCard() {
     int calculatedCharge = 0;
     String breakdown = '';
@@ -956,34 +1315,34 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
       ),
       child: _isSubmitting
           ? Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                SizedBox(
-                  width: 5.w,
-                  height: 5.w,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-              ),
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: 5.w,
+            height: 5.w,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
             ),
-            SizedBox(width: 3.w),
-            Text('Processing...'),
-          ],
-        )
-      : Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.payment, size: 6.w),
-            SizedBox(width: 2.w),
-            Text(
-              'Proceed to Payment',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
+          ),
+          SizedBox(width: 3.w),
+          Text('Processing...'),
+        ],
+      )
+          : Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.payment, size: 6.w),
+          SizedBox(width: 2.w),
+          Text(
+            'Proceed to Payment',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
             ),
-          ],
-        ),
-);
-}
+          ),
+        ],
+      ),
+    );
+  }
 }

@@ -6,6 +6,7 @@ import '../../core/app_export.dart';
 import '../../services/auth_service.dart';
 import 'tenant_documents_viewer_screen.dart';
 import 'tenant_card_widget.dart';
+import 'property_agreement_card.dart';
 
 class PeopleScreen extends StatefulWidget {
   const PeopleScreen({super.key});
@@ -75,7 +76,7 @@ class _PeopleScreenState extends State<PeopleScreen> with SingleTickerProviderSt
   Future<void> _loadProperties(String ownerId) async {
     try {
       print('🔄 Loading properties for owner: $ownerId');
-      
+
       var url = _authService.getPropertiesByOwnerUrl(ownerId);
       print('📡 Properties URL: $url');
 
@@ -90,12 +91,12 @@ class _PeopleScreenState extends State<PeopleScreen> with SingleTickerProviderSt
         print('⚠️ Owner endpoint not found, trying to fetch all properties...');
         url = _authService.getAllPropertiesUrl();
         print('📡 All Properties URL: $url');
-        
+
         response = await http.get(
           Uri.parse(url),
           headers: {'Content-Type': 'application/json'},
         ).timeout(const Duration(seconds: 30));
-        
+
         print('📥 All Properties Response Status: ${response.statusCode}');
       }
 
@@ -123,7 +124,7 @@ class _PeopleScreenState extends State<PeopleScreen> with SingleTickerProviderSt
               myProperties = List<Map<String, dynamic>>.from(filteredProperties);
             });
             print('✅ Loaded ${myProperties.length} properties');
-            
+
             for (var prop in myProperties) {
               print('   ✓ Property: ${prop['title']} (ID: ${prop['_id']}, Owner: ${prop['ownerId']})');
             }
@@ -155,145 +156,139 @@ class _PeopleScreenState extends State<PeopleScreen> with SingleTickerProviderSt
     }
   }
 
- // Add this to your _loadBookings method in PeopleScreen
-// Replace the existing _loadBookings method with this debug version
+  Future<void> _loadBookings(String ownerId) async {
+    try {
+      print('🔄 Loading bookings for owner: $ownerId');
 
-Future<void> _loadBookings(String ownerId) async {
-  try {
-    print('🔄 Loading bookings for owner: $ownerId');
-    
-    var url = _authService.getBookingsByOwnerUrl(ownerId);
-    print('📡 Bookings URL: $url');
+      var url = _authService.getBookingsByOwnerUrl(ownerId);
+      print('📡 Bookings URL: $url');
 
-    var response = await http.get(
-      Uri.parse(url),
-      headers: {'Content-Type': 'application/json'},
-    ).timeout(const Duration(seconds: 30));
-
-    print('📥 Bookings Response Status: ${response.statusCode}');
-    print('📥 Bookings Response Body: ${response.body}');
-
-    if (response.statusCode == 404) {
-      print('⚠️ Owner endpoint returned 404, trying to fetch all bookings...');
-      url = _authService.getAllBookingsUrl();
-      print('📡 All Bookings URL: $url');
-      
-      response = await http.get(
+      var response = await http.get(
         Uri.parse(url),
         headers: {'Content-Type': 'application/json'},
       ).timeout(const Duration(seconds: 30));
-      
-      print('📥 All Bookings Response Status: ${response.statusCode}');
-      print('📥 All Bookings Response Body: ${response.body}');
-    }
 
-    if (response.statusCode != 200) {
-      print('❌ Failed to load bookings: ${response.statusCode}');
-      setState(() {
-        allBookings = [];
-      });
-      return;
-    }
+      print('📥 Bookings Response Status: ${response.statusCode}');
+      print('📥 Bookings Response Body: ${response.body}');
 
-    final data = json.decode(response.body);
-    print('📊 Decoded data type: ${data.runtimeType}');
-    print('📊 Response structure: ${data.keys}');
+      if (response.statusCode == 404) {
+        print('⚠️ Owner endpoint returned 404, trying to fetch all bookings...');
+        url = _authService.getAllBookingsUrl();
+        print('📡 All Bookings URL: $url');
 
-    var bookingsData;
-    
-    if (data is List) {
-      bookingsData = data;
-      print('📊 Response is a direct array with ${data.length} items');
-    } else if (data is Map) {
-      if (data.containsKey('success')) {
-        print('📊 Success flag: ${data['success']}');
-        if (data['success'] == true) {
-          bookingsData = data['bookings'] ?? data['data'];
-        } else {
-          print('⚠️ API returned success: false');
-          print('   Message: ${data['message']}');
-        }
-      } else {
-        bookingsData = data['bookings'] ?? data['data'];
+        response = await http.get(
+          Uri.parse(url),
+          headers: {'Content-Type': 'application/json'},
+        ).timeout(const Duration(seconds: 30));
+
+        print('📥 All Bookings Response Status: ${response.statusCode}');
+        print('📥 All Bookings Response Body: ${response.body}');
       }
-    }
 
-    print('📊 Bookings data type: ${bookingsData?.runtimeType}');
+      if (response.statusCode != 200) {
+        print('❌ Failed to load bookings: ${response.statusCode}');
+        setState(() {
+          allBookings = [];
+        });
+        return;
+      }
 
-    if (bookingsData != null && bookingsData is List) {
-      print('📊 Raw bookings count: ${bookingsData.length}');
-      
-      // ⭐ DEBUG: Check documents in each booking
-      for (int i = 0; i < bookingsData.length; i++) {
-        var booking = bookingsData[i];
+      final data = json.decode(response.body);
+      print('📊 Decoded data type: ${data.runtimeType}');
+      print('📊 Response structure: ${data.keys}');
+
+      var bookingsData;
+
+      if (data is List) {
+        bookingsData = data;
+        print('📊 Response is a direct array with ${data.length} items');
+      } else if (data is Map) {
+        if (data.containsKey('success')) {
+          print('📊 Success flag: ${data['success']}');
+          if (data['success'] == true) {
+            bookingsData = data['bookings'] ?? data['data'];
+          } else {
+            print('⚠️ API returned success: false');
+            print('   Message: ${data['message']}');
+          }
+        } else {
+          bookingsData = data['bookings'] ?? data['data'];
+        }
+      }
+
+      print('📊 Bookings data type: ${bookingsData?.runtimeType}');
+
+      if (bookingsData != null && bookingsData is List) {
+        print('📊 Raw bookings count: ${bookingsData.length}');
+
+        for (int i = 0; i < bookingsData.length; i++) {
+          var booking = bookingsData[i];
+          print('');
+          print('📋 Booking #$i DETAILED DEBUG:');
+          print('   _id: ${booking['_id']}');
+          print('   tenantName: ${booking['tenantName']}');
+          print('   tenantEmail: ${booking['tenantEmail']}');
+          print('   ownerId: "${booking['ownerId']}"');
+          print('   propertyId: ${booking['propertyId']}');
+          print('   status: ${booking['status']}');
+
+          print('   📄 DOCUMENT FIELDS CHECK:');
+          print('      Has "documents": ${booking.containsKey('documents')}');
+          print('      Has "tenantDocuments": ${booking.containsKey('tenantDocuments')}');
+
+          if (booking.containsKey('documents')) {
+            print('      documents value: ${booking['documents']}');
+            print('      documents type: ${booking['documents'].runtimeType}');
+          }
+
+          if (booking.containsKey('tenantDocuments')) {
+            print('      tenantDocuments value: ${booking['tenantDocuments']}');
+            print('      tenantDocuments type: ${booking['tenantDocuments'].runtimeType}');
+          }
+
+          print('   📋 All booking keys:');
+          booking.keys.forEach((key) {
+            print('      - $key');
+          });
+        }
+
+        final filteredBookings = bookingsData.where((booking) {
+          final bookingOwnerId = booking['ownerId']?.toString() ?? '';
+          final ownerIdString = ownerId.toString();
+          return bookingOwnerId == ownerIdString;
+        }).toList();
+
         print('');
-        print('📋 Booking #$i DETAILED DEBUG:');
-        print('   _id: ${booking['_id']}');
-        print('   tenantName: ${booking['tenantName']}');
-        print('   tenantEmail: ${booking['tenantEmail']}');
-        print('   ownerId: "${booking['ownerId']}"');
-        print('   propertyId: ${booking['propertyId']}');
-        print('   status: ${booking['status']}');
-        
-        // ⭐ CHECK ALL POSSIBLE DOCUMENT FIELDS
-        print('   📄 DOCUMENT FIELDS CHECK:');
-        print('      Has "documents": ${booking.containsKey('documents')}');
-        print('      Has "tenantDocuments": ${booking.containsKey('tenantDocuments')}');
-        
-        if (booking.containsKey('documents')) {
-          print('      documents value: ${booking['documents']}');
-          print('      documents type: ${booking['documents'].runtimeType}');
-        }
-        
-        if (booking.containsKey('tenantDocuments')) {
-          print('      tenantDocuments value: ${booking['tenantDocuments']}');
-          print('      tenantDocuments type: ${booking['tenantDocuments'].runtimeType}');
-        }
-        
-        // ⭐ PRINT ALL BOOKING KEYS
-        print('   📋 All booking keys:');
-        booking.keys.forEach((key) {
-          print('      - $key');
+        print('📊 Total bookings in response: ${bookingsData.length}');
+        print('📊 Filtered bookings for owner $ownerId: ${filteredBookings.length}');
+
+        setState(() {
+          allBookings = List<Map<String, dynamic>>.from(filteredBookings);
+        });
+        print('✅ Final allBookings count: ${allBookings.length}');
+      } else {
+        print('⚠️ Bookings data is not a list or is null');
+        setState(() {
+          allBookings = [];
         });
       }
-      
-      final filteredBookings = bookingsData.where((booking) {
-        final bookingOwnerId = booking['ownerId']?.toString() ?? '';
-        final ownerIdString = ownerId.toString();
-        return bookingOwnerId == ownerIdString;
-      }).toList();
-
-      print('');
-      print('📊 Total bookings in response: ${bookingsData.length}');
-      print('📊 Filtered bookings for owner $ownerId: ${filteredBookings.length}');
-
-      setState(() {
-        allBookings = List<Map<String, dynamic>>.from(filteredBookings);
-      });
-      print('✅ Final allBookings count: ${allBookings.length}');
-    } else {
-      print('⚠️ Bookings data is not a list or is null');
+    } catch (e, stackTrace) {
+      print('❌ Error loading bookings: $e');
+      print('Stack trace: $stackTrace');
       setState(() {
         allBookings = [];
       });
     }
-  } catch (e, stackTrace) {
-    print('❌ Error loading bookings: $e');
-    print('Stack trace: $stackTrace');
-    setState(() {
-      allBookings = [];
-    });
   }
-}
 
   Future<void> _editTenantRent(Map<String, dynamic> tenant) async {
     final bookingId = tenant['bookingId']?.toString();
     final currentRent = (tenant['monthlyRent'] as num?)?.toDouble() ?? 0;
-    
+
     print('🔧 Edit Rent - Booking ID: $bookingId');
     print('🔧 Edit Rent - Current Rent: $currentRent');
     print('🔧 Edit Rent - Tenant: ${tenant['name']}');
-    
+
     if (bookingId == null || bookingId.isEmpty) {
       print('❌ Invalid booking ID');
       ScaffoldMessenger.of(context).showSnackBar(
@@ -402,7 +397,7 @@ Future<void> _loadBookings(String ownerId) async {
                 );
                 return;
               }
-              
+
               final parsedRent = double.tryParse(rentText);
               if (parsedRent == null || parsedRent <= 0) {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -413,7 +408,7 @@ Future<void> _loadBookings(String ownerId) async {
                 );
                 return;
               }
-              
+
               Navigator.pop(context, parsedRent);
             },
             style: ElevatedButton.styleFrom(
@@ -482,22 +477,22 @@ Future<void> _loadBookings(String ownerId) async {
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        
+
         print('✅ Response decoded successfully');
         print('   Success flag: ${data['success']}');
-        
+
         if (data['success'] == false) {
           print('❌ Backend returned success: false');
           print('   Message: ${data['message']}');
           throw Exception(data['message'] ?? 'Failed to update rent');
         }
-        
+
         print('✅ Rent updated successfully, reloading data...');
         await _loadData();
         print('✅ Data reloaded');
-        
+
         if (!mounted) return;
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
@@ -523,9 +518,9 @@ Future<void> _loadBookings(String ownerId) async {
       }
       print('❌ Error updating rent: $e');
       print('❌ Stack trace: $stackTrace');
-      
+
       if (!mounted) return;
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Failed to update rent: $e'),
@@ -538,7 +533,7 @@ Future<void> _loadBookings(String ownerId) async {
 
   Future<void> _deleteTenant(Map<String, dynamic> tenant) async {
     final bookingId = tenant['bookingId']?.toString();
-    
+
     if (bookingId == null || bookingId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -657,14 +652,14 @@ Future<void> _loadBookings(String ownerId) async {
       if (response.statusCode == 200 || response.statusCode == 204) {
         if (response.body.isNotEmpty) {
           final data = json.decode(response.body);
-          
+
           if (data['success'] == false) {
             throw Exception(data['message'] ?? 'Failed to delete tenant');
           }
         }
-        
+
         await _loadData();
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
@@ -683,7 +678,7 @@ Future<void> _loadBookings(String ownerId) async {
     } catch (e) {
       Navigator.pop(context);
       print('❌ Error deleting tenant: $e');
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Failed to remove tenant: $e'),
@@ -697,7 +692,7 @@ Future<void> _loadBookings(String ownerId) async {
   Map<String, dynamic> _getPropertyStats(Map<String, dynamic> property) {
     final propertyId = property['_id']?.toString() ?? '';
     final propertyBookings = allBookings.where((b) =>
-        b['propertyId']?.toString() == propertyId &&
+    b['propertyId']?.toString() == propertyId &&
         b['status'] != 'cancelled'
     ).toList();
 
@@ -806,20 +801,17 @@ Future<void> _loadBookings(String ownerId) async {
       final roomA = a['roomNumber'];
       final roomB = b['roomNumber'];
 
-      // Handle null values - put them at the end
       if (roomA == null && roomB == null) return 0;
       if (roomA == null) return 1;
       if (roomB == null) return -1;
 
-      // Try to parse as numbers for proper numeric sorting
       final numA = int.tryParse(roomA.toString());
       final numB = int.tryParse(roomB.toString());
 
       if (numA != null && numB != null) {
-        return numA.compareTo(numB); // Numeric comparison
+        return numA.compareTo(numB);
       }
 
-      // Fall back to string comparison if not numbers
       return roomA.toString().compareTo(roomB.toString());
     });
 
@@ -897,12 +889,12 @@ Future<void> _loadBookings(String ownerId) async {
           : _errorMessage != null
           ? _buildErrorState()
           : TabBarView(
-              controller: _tabController,
-              children: [
-                _buildDashboardTab(),
-                _buildTenantTab(),
-              ],
-            ),
+        controller: _tabController,
+        children: [
+          _buildDashboardTab(),
+          _buildTenantTab(),
+        ],
+      ),
     );
   }
 
@@ -1015,6 +1007,7 @@ Future<void> _loadBookings(String ownerId) async {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Property Header
           Row(
             children: [
               Container(
@@ -1051,6 +1044,7 @@ Future<void> _loadBookings(String ownerId) async {
           ),
           SizedBox(height: 2.h),
 
+          // Occupancy Bar
           if (totalBeds > 0) ...[
             Row(
               children: [
@@ -1105,6 +1099,7 @@ Future<void> _loadBookings(String ownerId) async {
             SizedBox(height: 2.h),
           ],
 
+          // Stats
           _buildStatRow(Icons.people, 'Total Tenants', totalTenants.toString()),
           _buildStatRow(Icons.people_alt, 'Active Tenants', activeTenants.toString()),
           _buildStatRow(Icons.campaign, 'Leads', leads.toString()),
@@ -1123,9 +1118,154 @@ Future<void> _loadBookings(String ownerId) async {
               ),
             ),
           ],
+
+          // ⭐⭐⭐ NEW: Rental Agreement Card ⭐⭐⭐
+          PropertyAgreementCard(
+            agreementUrl: property['agreementUrl'],
+            propertyTitle: property['title'] ?? 'Property',
+            onEdit: () => _regenerateAgreement(property),
+          ),
         ],
       ),
     );
+  }
+
+// Add this method to handle agreement regeneration
+  Future<void> _regenerateAgreement(Map<String, dynamic> property) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.description, color: AppTheme.primaryLight),
+            SizedBox(width: 2.w),
+            Expanded(
+              child: Text(
+                'Regenerate Agreement?',
+                style: TextStyle(fontSize: 14.sp),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('This will create a new rental agreement PDF for:'),
+            SizedBox(height: 1.h),
+            Text(
+              property['title'] ?? 'Property',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            SizedBox(height: 2.h),
+            Container(
+              padding: EdgeInsets.all(2.w),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.blue.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, color: Colors.blue, size: 5.w),
+                  SizedBox(width: 2.w),
+                  Expanded(
+                    child: Text(
+                      'The current agreement will be replaced',
+                      style: TextStyle(
+                        color: Colors.blue.shade700,
+                        fontSize: 9.sp,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primaryLight,
+              foregroundColor: Colors.white,
+            ),
+            child: Text('Regenerate'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Center(
+        child: Card(
+          child: Padding(
+            padding: EdgeInsets.all(4.w),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(color: AppTheme.primaryLight),
+                SizedBox(height: 2.h),
+                Text('Generating new agreement...'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    try {
+      // TODO: Implement agreement regeneration
+      // This would involve:
+      // 1. Get property details from backend
+      // 2. Call AgreementPdfService to generate new PDF
+      // 3. Upload to Cloudinary
+      // 4. Update property record with new agreementUrl
+      // 5. Refresh data
+
+      print('🔄 Regenerating agreement for property: ${property['_id']}');
+
+      // Placeholder - replace with actual implementation
+      await Future.delayed(Duration(seconds: 2));
+
+      Navigator.pop(context); // Close loading dialog
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.white),
+              SizedBox(width: 2.w),
+              Expanded(child: Text('Agreement regenerated successfully')),
+            ],
+          ),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      await _loadData(); // Reload data
+
+    } catch (e) {
+      Navigator.pop(context); // Close loading dialog
+      print('❌ Error regenerating agreement: $e');
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to regenerate agreement: $e'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 4),
+        ),
+      );
+    }
   }
 
   Widget _buildStatRow(IconData icon, String label, String value) {
@@ -1171,13 +1311,13 @@ Future<void> _loadBookings(String ownerId) async {
               prefixIcon: Icon(Icons.search, color: AppTheme.primaryLight),
               suffixIcon: _searchQuery.isNotEmpty
                   ? IconButton(
-                      icon: Icon(Icons.clear),
-                      onPressed: () {
-                        setState(() {
-                          _searchQuery = '';
-                        });
-                      },
-                    )
+                icon: Icon(Icons.clear),
+                onPressed: () {
+                  setState(() {
+                    _searchQuery = '';
+                  });
+                },
+              )
                   : null,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -1240,44 +1380,44 @@ Future<void> _loadBookings(String ownerId) async {
         Expanded(
           child: tenants.isEmpty
               ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.people_outline, size: 15.w, color: Colors.grey),
-                      SizedBox(height: 2.h),
-                      Text(
-                        _searchQuery.isNotEmpty
-                            ? 'No tenants found'
-                            : 'No Tenants Yet',
-                        style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600),
-                      ),
-                      SizedBox(height: 1.h),
-                      Text(
-                        _searchQuery.isNotEmpty
-                            ? 'Try different search terms'
-                            : 'Tenants will appear here after booking',
-                        style: TextStyle(color: Colors.grey.shade600),
-                      ),
-                    ],
-                  ),
-                )
-              : RefreshIndicator(
-                  onRefresh: _loadData,
-                  color: AppTheme.primaryLight,
-                  child: ListView.builder(
-                    padding: EdgeInsets.symmetric(horizontal: 4.w),
-                    itemCount: tenants.length,
-                    itemBuilder: (context, index) {
-                      final tenant = tenants[index];
-                      return _buildTenantCard(tenant);
-                    },
-                  ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.people_outline, size: 15.w, color: Colors.grey),
+                SizedBox(height: 2.h),
+                Text(
+                  _searchQuery.isNotEmpty
+                      ? 'No tenants found'
+                      : 'No Tenants Yet',
+                  style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600),
                 ),
+                SizedBox(height: 1.h),
+                Text(
+                  _searchQuery.isNotEmpty
+                      ? 'Try different search terms'
+                      : 'Tenants will appear here after booking',
+                  style: TextStyle(color: Colors.grey.shade600),
+                ),
+              ],
+            ),
+          )
+              : RefreshIndicator(
+            onRefresh: _loadData,
+            color: AppTheme.primaryLight,
+            child: ListView.builder(
+              padding: EdgeInsets.symmetric(horizontal: 4.w),
+              itemCount: tenants.length,
+              itemBuilder: (context, index) {
+                final tenant = tenants[index];
+                return _buildTenantCard(tenant);
+              },
+            ),
+          ),
         ),
       ],
     );
   }
-  
+
   Widget _buildTenantStatCard(String value, String label, Color color) {
     return Container(
       padding: EdgeInsets.all(3.w),
@@ -1336,4 +1476,3 @@ Future<void> _loadBookings(String ownerId) async {
     );
   }
 }
-

@@ -62,7 +62,7 @@ class TenantCardWidget extends StatelessWidget {
   /// ⭐ FIXED: Convert camelCase keys to snake_case for viewer compatibility
   Map<String, dynamic> _normalizeDocuments(Map<String, dynamic> docs) {
     final Map<String, dynamic> normalized = {};
-    
+
     // Mapping from camelCase (upload) to snake_case (viewer)
     final Map<String, String> keyMapping = {
       'idProof': 'id_proof',
@@ -87,7 +87,7 @@ class TenantCardWidget extends StatelessWidget {
     print('📋 Normalized documents:');
     print('   Input: $docs');
     print('   Output: $normalized');
-    
+
     return normalized;
   }
 
@@ -95,13 +95,13 @@ class TenantCardWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     print('═══════════════════════════════════════════════════════');
     print('🔍 TENANT CARD - Building card for: ${tenant['name']}');
-    
+
     final dues = (tenant['pendingDues'] as num? ?? 0).toDouble();
     final underNotice = tenant['underNotice'] as bool? ?? false;
-    
+
     // Get documents from tenant data
     Map<String, dynamic> rawDocuments = {};
-    
+
     if (tenant['documents'] != null) {
       if (tenant['documents'] is Map) {
         rawDocuments = Map<String, dynamic>.from(tenant['documents']);
@@ -112,17 +112,17 @@ class TenantCardWidget extends StatelessWidget {
     } else {
       print('⚠️ No documents field found');
     }
-    
+
     // ⭐ Normalize document keys for viewer compatibility
     final documents = _normalizeDocuments(rawDocuments);
-    
+
     // Count valid documents
     int uploadedDocsCount = 0;
     documents.forEach((key, value) {
       if (value != null) {
         final valueStr = value.toString().trim();
-        if (valueStr.isNotEmpty && 
-            valueStr != 'null' && 
+        if (valueStr.isNotEmpty &&
+            valueStr != 'null' &&
             valueStr.length > 10 &&
             (valueStr.startsWith('http://') || valueStr.startsWith('https://'))) {
           uploadedDocsCount++;
@@ -132,7 +132,7 @@ class TenantCardWidget extends StatelessWidget {
         }
       }
     });
-    
+
     print('📈 RESULT: $uploadedDocsCount valid documents');
     print('═══════════════════════════════════════════════════════');
 
@@ -261,7 +261,6 @@ class TenantCardWidget extends StatelessWidget {
           ),
           SizedBox(height: 2.h),
 
-          // Property Info
           // Property Info with Room Number & Occupancy
           Container(
             padding: EdgeInsets.all(2.w),
@@ -290,7 +289,7 @@ class TenantCardWidget extends StatelessWidget {
                   ],
                 ),
 
-                // ⭐ NEW: Room Number & Occupancy Type
+                // ⭐ Room Number & Occupancy Type
                 if ((tenant['roomNumber'] != null && tenant['roomNumber'].toString().isNotEmpty) ||
                     (tenant['occupancyType'] != null && tenant['occupancyType'].toString().isNotEmpty)) ...[
                   SizedBox(height: 1.h),
@@ -402,79 +401,89 @@ class TenantCardWidget extends StatelessWidget {
 
           SizedBox(height: 2.h),
 
-          // ⭐ FIXED: Documents Section with normalized keys
-          InkWell(
-            onTap: () {
-              print('👆 Documents tapped - Navigating with $uploadedDocsCount documents');
-              
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => TenantDocumentsViewerScreen(
-                    tenantName: tenant['name'] as String,
-                    tenantEmail: tenant['email'] as String,
-                    documents: documents, // ⭐ Pass normalized documents
-                  ),
-                ),
-              );
-            },
-            child: Container(
-              padding: EdgeInsets.all(3.w),
-              decoration: BoxDecoration(
-                color: uploadedDocsCount > 0 
-                    ? Colors.blue.shade50 
-                    : Colors.grey.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: uploadedDocsCount > 0 
-                      ? Colors.blue.shade200 
-                      : Colors.grey.shade300,
-                ),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.description,
-                    color: uploadedDocsCount > 0 ? Colors.blue : Colors.grey.shade600,
-                    size: 5.w,
-                  ),
-                  SizedBox(width: 3.w),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          uploadedDocsCount > 0 
-                              ? 'Documents: $uploadedDocsCount uploaded'
-                              : 'No Documents',
-                          style: TextStyle(
-                            fontSize: 10.sp,
-                            fontWeight: FontWeight.w600,
-                            color: uploadedDocsCount > 0 
-                                ? Colors.blue.shade800 
-                                : Colors.grey.shade700,
-                          ),
-                        ),
-                        Text(
-                          uploadedDocsCount > 0
-                              ? 'Tap to view documents'
-                              : 'No documents uploaded yet',
-                          style: TextStyle(
-                            fontSize: 9.sp,
-                            color: uploadedDocsCount > 0
-                                ? Colors.blue.shade600
-                                : Colors.grey.shade600,
-                          ),
-                        ),
-                      ],
+          // ⭐ Agreement Button - NEW PROMINENT DESIGN
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () {
+                print('👆 Agreement button tapped - Navigating with $uploadedDocsCount documents');
+
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => TenantDocumentsViewerScreen(
+                      tenantName: tenant['name'] as String,
+                      tenantEmail: tenant['email'] as String,
+                      documents: documents, // ⭐ Pass normalized documents
                     ),
                   ),
-                  Icon(
-                    Icons.arrow_forward_ios,
-                    size: 4.w,
-                    color: uploadedDocsCount > 0 ? Colors.blue : Colors.grey,
+                );
+              },
+              borderRadius: BorderRadius.circular(10),
+              child: Container(
+                padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 2.5.h),
+                decoration: BoxDecoration(
+                  gradient: uploadedDocsCount > 0
+                      ? LinearGradient(
+                    colors: [Colors.blue.shade600, Colors.blue.shade700],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
+                      : LinearGradient(
+                    colors: [Colors.grey.shade400, Colors.grey.shade500],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
-                ],
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: uploadedDocsCount > 0 ? [
+                    BoxShadow(
+                      color: Colors.blue.withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: Offset(0, 4),
+                    ),
+                  ] : [],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.description_outlined,
+                      color: Colors.white,
+                      size: 6.w,
+                    ),
+                    SizedBox(width: 3.w),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'View Agreement & Documents',
+                            style: TextStyle(
+                              fontSize: 11.sp,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          SizedBox(height: 0.3.h),
+                          Text(
+                            uploadedDocsCount > 0
+                                ? '$uploadedDocsCount document${uploadedDocsCount > 1 ? 's' : ''} uploaded'
+                                : 'No documents yet',
+                            style: TextStyle(
+                              fontSize: 9.sp,
+                              color: Colors.white.withOpacity(0.9),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(
+                      Icons.arrow_forward_ios,
+                      size: 4.5.w,
+                      color: Colors.white,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
