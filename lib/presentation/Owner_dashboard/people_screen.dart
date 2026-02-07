@@ -7,6 +7,7 @@ import '../../services/auth_service.dart';
 import 'tenant_documents_viewer_screen.dart';
 import 'tenant_card_widget.dart';
 import 'property_agreement_card.dart';
+import 'property_agreement_helper.dart'; // ⭐ ADD THIS IMPORT
 
 class PeopleScreen extends StatefulWidget {
   const PeopleScreen({super.key});
@@ -18,6 +19,7 @@ class PeopleScreen extends StatefulWidget {
 class _PeopleScreenState extends State<PeopleScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final AuthService _authService = AuthService();
+  final PropertyAgreementHelper _agreementHelper = PropertyAgreementHelper(); // ⭐ ADD THIS
 
   // Data lists
   List<Map<String, dynamic>> myProperties = [];
@@ -1119,18 +1121,152 @@ class _PeopleScreenState extends State<PeopleScreen> with SingleTickerProviderSt
             ),
           ],
 
-          // ⭐⭐⭐ NEW: Rental Agreement Card ⭐⭐⭐
+          // ⭐⭐⭐ Rental Agreement Card ⭐⭐⭐
           PropertyAgreementCard(
             agreementUrl: property['agreementUrl'],
             propertyTitle: property['title'] ?? 'Property',
             onEdit: () => _regenerateAgreement(property),
+            onGenerate: () => _generateAgreement(property), // ⭐ NEW
           ),
         ],
       ),
     );
   }
 
-// Add this method to handle agreement regeneration
+  // ⭐⭐⭐ NEW METHOD: Generate agreement for properties without one ⭐⭐⭐
+  Future<void> _generateAgreement(Map<String, dynamic> property) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.add_circle, color: AppTheme.primaryLight),
+            SizedBox(width: 2.w),
+            Expanded(
+              child: Text(
+                'Generate Agreement',
+                style: TextStyle(fontSize: 14.sp),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Generate a rental agreement for:'),
+            SizedBox(height: 1.h),
+            Text(
+              property['title'] ?? 'Property',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            SizedBox(height: 2.h),
+            Container(
+              padding: EdgeInsets.all(2.w),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.blue.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, color: Colors.blue, size: 5.w),
+                  SizedBox(width: 2.w),
+                  Expanded(
+                    child: Text(
+                      'This will create a professional rental agreement PDF',
+                      style: TextStyle(
+                        color: Colors.blue.shade700,
+                        fontSize: 9.sp,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primaryLight,
+              foregroundColor: Colors.white,
+            ),
+            child: Text('Generate'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Center(
+        child: Card(
+          child: Padding(
+            padding: EdgeInsets.all(4.w),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(color: AppTheme.primaryLight),
+                SizedBox(height: 2.h),
+                Text('Generating agreement...'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    try {
+      print('🔄 Generating agreement for property: ${property['_id']}');
+
+      final agreementUrl = await _agreementHelper.regenerateAgreement(property);
+
+      Navigator.pop(context); // Close loading dialog
+
+      if (agreementUrl != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 2.w),
+                Expanded(child: Text('Agreement generated successfully')),
+              ],
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        await _loadData(); // Reload data
+      } else {
+        throw Exception('Failed to generate agreement');
+      }
+    } catch (e) {
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context); // Close loading dialog
+      }
+      print('❌ Error generating agreement: $e');
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to generate agreement: $e'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 4),
+        ),
+      );
+    }
+  }
+
+  // ⭐⭐⭐ UPDATED METHOD: Regenerate agreement ⭐⭐⭐
   Future<void> _regenerateAgreement(Map<String, dynamic> property) async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -1202,7 +1338,6 @@ class _PeopleScreenState extends State<PeopleScreen> with SingleTickerProviderSt
 
     if (confirm != true) return;
 
-    // Show loading dialog
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -1224,38 +1359,34 @@ class _PeopleScreenState extends State<PeopleScreen> with SingleTickerProviderSt
     );
 
     try {
-      // TODO: Implement agreement regeneration
-      // This would involve:
-      // 1. Get property details from backend
-      // 2. Call AgreementPdfService to generate new PDF
-      // 3. Upload to Cloudinary
-      // 4. Update property record with new agreementUrl
-      // 5. Refresh data
-
       print('🔄 Regenerating agreement for property: ${property['_id']}');
 
-      // Placeholder - replace with actual implementation
-      await Future.delayed(Duration(seconds: 2));
+      final agreementUrl = await _agreementHelper.regenerateAgreement(property);
 
       Navigator.pop(context); // Close loading dialog
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              Icon(Icons.check_circle, color: Colors.white),
-              SizedBox(width: 2.w),
-              Expanded(child: Text('Agreement regenerated successfully')),
-            ],
+      if (agreementUrl != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 2.w),
+                Expanded(child: Text('Agreement regenerated successfully')),
+              ],
+            ),
+            backgroundColor: Colors.green,
           ),
-          backgroundColor: Colors.green,
-        ),
-      );
+        );
 
-      await _loadData(); // Reload data
-
+        await _loadData(); // Reload data
+      } else {
+        throw Exception('Failed to generate agreement');
+      }
     } catch (e) {
-      Navigator.pop(context); // Close loading dialog
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context); // Close loading dialog
+      }
       print('❌ Error regenerating agreement: $e');
 
       ScaffoldMessenger.of(context).showSnackBar(

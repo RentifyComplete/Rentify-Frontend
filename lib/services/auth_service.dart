@@ -27,6 +27,7 @@ class AuthService {
   String getAllBookingsUrl() => '$baseUrl$bookingsEndpoint';
   String getUpdateBookingUrl(String bookingId) => '$baseUrl$bookingsEndpoint/$bookingId';
   String getDeleteBookingUrl(String bookingId) => '$baseUrl$bookingsEndpoint/$bookingId';
+  String getUpdatePropertyUrl(String propertyId) => '$baseUrl$propertiesEndpoint/$propertyId';
   String getRecordRentPaymentUrl(String bookingId) => '$baseUrl$bookingsEndpoint/$bookingId/rent';
   String getSendResetOtpUrl() => '$baseUrl$authEndpoint/send-reset-otp';
   String getVerifyOtpUrl() => '$baseUrl$authEndpoint/verify-otp';
