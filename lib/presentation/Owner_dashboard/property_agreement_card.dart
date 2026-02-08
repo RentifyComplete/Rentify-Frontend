@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:sizer/sizer.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'pdf_viewer_screen.dart';
 
 class PropertyAgreementCard extends StatelessWidget {
   final String? agreementUrl;
@@ -16,15 +16,18 @@ class PropertyAgreementCard extends StatelessWidget {
     this.onGenerate,
   }) : super(key: key);
 
-  Future<void> _openAgreement() async {
+  void _openAgreement(BuildContext context) {
     if (agreementUrl == null || agreementUrl!.isEmpty) return;
 
-    final uri = Uri.parse(agreementUrl!);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
-      print('❌ Could not launch $agreementUrl');
-    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PDFViewerScreen(
+          pdfUrl: agreementUrl!,
+          title: 'Rental Agreement',
+        ),
+      ),
+    );
   }
 
   @override
@@ -222,7 +225,7 @@ class PropertyAgreementCard extends StatelessWidget {
             children: [
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: _openAgreement,
+                  onPressed: () => _openAgreement(context),
                   icon: Icon(Icons.visibility, size: 5.w),
                   label: Text('View Agreement'),
                   style: ElevatedButton.styleFrom(

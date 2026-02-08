@@ -103,35 +103,35 @@ class CloudinaryService {
   /// - userId: Optional user ID for organization
   /// - tags: Optional tags for categorization
   Future<Map<String, dynamic>?> uploadDocument(
-    File documentFile, {
-    String? folder,
-    String? documentType,
-    String? userId,
-    List<String>? tags,
-    Map<String, dynamic>? metadata,
-  }) async {
+      File documentFile, {
+        String? folder,
+        String? documentType,
+        String? userId,
+        List<String>? tags,
+        Map<String, dynamic>? metadata,
+      }) async {
     try {
       // Get file info
       final fileName = path.basenameWithoutExtension(documentFile.path);
       final extension = path.extension(documentFile.path).toLowerCase();
       final fileSize = await documentFile.length();
-      
+
       // Determine resource type
       String resourceType = _getResourceType(extension);
-      
+
       // Build folder path - simplified to avoid deep nesting
       String finalFolder = folder ?? 'documents';
-      
+
       // Build public ID with timestamp for uniqueness
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final publicId = '${fileName}_$timestamp';
-      
+
       // Build tags list
       List<String> finalTags = tags ?? [];
       if (documentType != null && !finalTags.contains(documentType)) {
         finalTags.add(documentType);
       }
-      
+
       final uri = Uri.parse(
           "https://api.cloudinary.com/v1_1/$cloudName/$resourceType/upload");
 
@@ -147,6 +147,8 @@ class CloudinaryService {
         ..fields['upload_preset'] = uploadPreset
         ..fields['folder'] = finalFolder
         ..fields['public_id'] = publicId
+        ..fields['access_mode'] = 'public'      // ⭐ ADD THIS
+        ..fields['type'] = 'upload'             // ⭐ ADD THIS
         ..files.add(await http.MultipartFile.fromPath('file', documentFile.path));
 
       // Add tags
@@ -160,15 +162,15 @@ class CloudinaryService {
         'original_filename': path.basename(documentFile.path),
         'file_size': fileSize.toString(),
       };
-      
+
       if (documentType != null) {
         contextData['document_type'] = documentType;
       }
-      
+
       if (metadata != null) {
         contextData.addAll(metadata);
       }
-      
+
       request.fields['context'] = contextData.entries
           .map((e) => '${e.key}=${e.value}')
           .join('|');
@@ -185,13 +187,13 @@ class CloudinaryService {
       if (response.statusCode == 200) {
         final resStr = await response.stream.bytesToString();
         final data = json.decode(resStr);
-        
+
         print("✅ Document uploaded successfully!");
         print("   URL: ${data['secure_url']}");
         print("   Public ID: ${data['public_id']}");
         print("   Format: ${data['format']}");
         print("   Resource Type: ${data['resource_type']}");
-        
+
         // Return comprehensive data with guaranteed url field
         return {
           'url': data['secure_url'],
@@ -210,7 +212,7 @@ class CloudinaryService {
         print("❌ Upload failed with status: ${response.statusCode}");
         final resStr = await response.stream.bytesToString();
         print("❌ Error response: $resStr");
-        
+
         // Try to parse error message
         try {
           final errorData = json.decode(resStr);
@@ -218,7 +220,7 @@ class CloudinaryService {
         } catch (e) {
           print("❌ Could not parse error response");
         }
-        
+
         return null;
       }
     } catch (e) {
