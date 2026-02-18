@@ -13,6 +13,7 @@ import '../Owner_dashboard/owner_dashboard.dart';
 import '../../core/app_export.dart';
 import '../../services/backend_service.dart';
 import '../../services/auth_service.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../providers/user_provider.dart';
 import '../../providers/document_provider.dart'; // ⭐ NEW
 import 'widgets/featured_property_card_widget.dart';
@@ -1533,6 +1534,7 @@ Future<void> _handleLogout(BuildContext context) async {
         SizedBox(height: 3.h),
 
         // Lease & Documents - Only show if has active booking
+        // Lease & Documents - Only show if has active booking
         if (hasActiveBooking) ...[
           Padding(
             padding: EdgeInsets.symmetric(horizontal: 4.w),
@@ -1549,6 +1551,95 @@ Future<void> _handleLogout(BuildContext context) async {
             child: LeaseDocumentsCard(
               leaseEndDate: profileData['leaseEndDate'] as String,
               securityDeposit: profileData['securityDeposit'] as int,
+            ),
+          ),
+          SizedBox(height: 2.h),
+
+          // ✅ ADD THIS: Rental Agreement Section
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 4.w),
+            child: FutureBuilder<String?>(
+              future: _backendService.getPropertyAgreementUrl(
+                _activeBooking!['propertyId']?.toString() ?? '',
+              ),
+              builder: (context, snapshot) {
+                final agreementUrl = snapshot.data;
+                final hasAgreement = agreementUrl != null && agreementUrl.isNotEmpty;
+
+                return Container(
+                  padding: EdgeInsets.all(3.w),
+                  decoration: BoxDecoration(
+                    color: hasAgreement ? Colors.green.shade50 : Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: hasAgreement ? Colors.green.shade200 : Colors.orange.shade200,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.description,
+                        color: hasAgreement ? Colors.green.shade700 : Colors.orange.shade700,
+                        size: 6.w,
+                      ),
+                      SizedBox(width: 3.w),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Rental Agreement',
+                              style: TextStyle(
+                                fontSize: 11.sp,
+                                fontWeight: FontWeight.w600,
+                                color: hasAgreement
+                                    ? Colors.green.shade900
+                                    : Colors.orange.shade900,
+                              ),
+                            ),
+                            Text(
+                              hasAgreement
+                                  ? 'Tap to download your agreement'
+                                  : 'Agreement not yet generated',
+                              style: TextStyle(
+                                fontSize: 9.sp,
+                                color: hasAgreement
+                                    ? Colors.green.shade700
+                                    : Colors.orange.shade700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (snapshot.connectionState == ConnectionState.waiting)
+                        SizedBox(
+                          width: 5.w,
+                          height: 5.w,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      else if (hasAgreement)
+                        ElevatedButton.icon(
+                          onPressed: () async {
+                            final uri = Uri.parse(agreementUrl);
+                            if (await canLaunchUrl(uri)) {
+                              await launchUrl(uri, mode: LaunchMode.externalApplication);
+                            }
+                          },
+                          icon: Icon(Icons.download, size: 4.w),
+                          label: Text('Download', style: TextStyle(fontSize: 9.sp)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            foregroundColor: Colors.white,
+                            padding: EdgeInsets.symmetric(horizontal: 3.w, vertical: 1.h),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                );
+              },
             ),
           ),
           SizedBox(height: 3.h),

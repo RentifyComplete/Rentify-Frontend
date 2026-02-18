@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:sizer/sizer.dart';
-import 'pdf_viewer_screen.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class PropertyAgreementCard extends StatelessWidget {
   final String? agreementUrl;
@@ -16,18 +16,29 @@ class PropertyAgreementCard extends StatelessWidget {
     this.onGenerate,
   }) : super(key: key);
 
-  void _openAgreement(BuildContext context) {
+  Future<void> _downloadAgreement(BuildContext context) async {
     if (agreementUrl == null || agreementUrl!.isEmpty) return;
 
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => PDFViewerScreen(
-          pdfUrl: agreementUrl!,
-          title: 'Rental Agreement',
+    try {
+      final uri = Uri.parse(agreementUrl!);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not open the agreement URL'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error downloading agreement: $e'),
+          backgroundColor: Colors.red,
         ),
-      ),
-    );
+      );
+    }
   }
 
   @override
@@ -225,9 +236,9 @@ class PropertyAgreementCard extends StatelessWidget {
             children: [
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: () => _openAgreement(context),
-                  icon: Icon(Icons.visibility, size: 5.w),
-                  label: Text('View Agreement'),
+                  onPressed: () => _downloadAgreement(context), // ✅ Direct download
+                  icon: Icon(Icons.download, size: 5.w),
+                  label: Text('Download PDF'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.blue,
                     foregroundColor: Colors.white,

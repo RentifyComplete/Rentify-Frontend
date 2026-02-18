@@ -8,7 +8,7 @@ import 'package:path/path.dart' as path;
 
 import '../../core/app_export.dart';
 import '../../services/auth_service.dart';
-import '../../services/cloudinary_service.dart';
+import '../../services/supabase_storage_service.dart';
 import '../../services/agreement_pdf_service.dart'; // ⭐ UPDATED: Simplified version
 import '../../providers/user_provider.dart';
 import '../Owner_dashboard/property_payment_screen.dart';
@@ -24,7 +24,6 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
   final _formKey = GlobalKey<FormState>();
   final ImagePicker _picker = ImagePicker();
   final AuthService _authService = AuthService();
-  final CloudinaryService _cloudinaryService = CloudinaryService();
   final AgreementPdfService _agreementService = AgreementPdfService(); // ⭐ Simplified service
 
   List<File> _propertyImages = [];
@@ -252,6 +251,37 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
     );
   }
 
+  // ========================================
+// UPDATED: _submitProperty() method only
+// Replace the existing _submitProperty() in your AddPropertyScreen
+// File: lib/screens/add_property/add_property_screen.dart
+//
+// CHANGES:
+// ✅ Replaced CloudinaryService with SupabaseStorageService
+// ✅ Signature uploaded to Supabase
+// ✅ Agreement PDF uploaded to Supabase
+// ✅ Property images uploaded to Supabase
+// ✅ PDFs will open directly in browser!
+// ========================================
+
+// ⭐ STEP 1: Add this import at the TOP of your add_property_screen.dart
+// (Replace the cloudinary_service import)
+//
+// REMOVE this line:
+//   import '../../services/cloudinary_service.dart';
+//
+// ADD this line:
+//   import '../../services/supabase_storage_service.dart';
+
+// ⭐ STEP 2: Remove CloudinaryService from your class variables
+//
+// REMOVE these lines:
+//   final CloudinaryService _cloudinaryService = CloudinaryService();
+//
+// (Keep everything else the same)
+
+// ⭐ STEP 3: Replace your entire _submitProperty() method with this:
+
   Future<void> _submitProperty() async {
     print('🔵 Submit property button clicked');
 
@@ -267,7 +297,6 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
       return;
     }
 
-    // ⭐ NEW: Validate signature image
     if (_signatureImage == null) {
       print('❌ No signature image selected');
       _showSnackBar('Please add owner signature image', Colors.red);
@@ -290,6 +319,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
 
       print('👤 Current Owner ID: $currentUserId');
 
+      // Verify images exist
       print('🔍 Verifying ${_propertyImages.length} images...');
       for (var img in _propertyImages) {
         if (!await img.exists()) {
@@ -298,47 +328,39 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
       }
       print('✅ All images verified and ready');
 
-      // ⭐ NEW: Upload signature image to Cloudinary
+      // ⭐ UPLOAD SIGNATURE TO SUPABASE (replaces Cloudinary)
       print('');
-      print('☁️ Uploading signature image to Cloudinary...');
+      print('☁️ Uploading signature image to Supabase...');
 
       String? signatureUrl;
 
       try {
-        // Upload signature image
-        signatureUrl = await _cloudinaryService.uploadImage(
-          _signatureImage!,
-          folder: 'properties/owner_documents',
-          publicId: 'signature_${currentUserId}_${DateTime.now().millisecondsSinceEpoch}',
-          tags: ['signature', 'owner_document', currentUserId],
-          context: {
-            'type': 'owner_signature',
-            'owner_id': currentUserId,
-          },
+        signatureUrl = await SupabaseStorageService.uploadSignature(
+          imageFile: _signatureImage!,
+          userId: currentUserId,
         );
 
-        if (signatureUrl == null) {
+        if (signatureUrl == null || signatureUrl.isEmpty) {
           throw Exception('Failed to upload signature image');
         }
         print('✅ Signature uploaded: $signatureUrl');
 
       } catch (e) {
-        print('❌ Error uploading signature to Cloudinary: $e');
+        print('❌ Error uploading signature to Supabase: $e');
         throw Exception('Failed to upload signature: $e');
       }
 
-      // ⭐ NEW: Generate and upload rental agreement PDF
+      // ⭐ GENERATE AND UPLOAD AGREEMENT PDF TO SUPABASE
       print('');
       print('📄 Generating rental agreement PDF...');
 
       String? agreementUrl;
 
       try {
-        // Calculate security deposit (typically 1-2 months rent)
         final rentAmount = double.tryParse(_rentController.text.trim()) ?? 0;
-        final securityDeposit = rentAmount * 2; // 2 months rent as security
+        final securityDeposit = rentAmount * 2;
 
-        // Generate PDF
+        // Generate PDF (same as before)
         final agreementPdf = await _agreementService.generateAgreement(
           ownerName: _ownerNameController.text.trim(),
           ownerSignatureUrl: signatureUrl,
@@ -348,7 +370,9 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
           state: _stateController.text.trim(),
           zipCode: _zipCodeController.text.trim(),
           propertyType: _selectedPropertyType,
-          bhkOrBeds: _selectedPropertyType == 'PG' ? '$_numberOfBeds Beds' : _selectedBHK,
+          bhkOrBeds: _selectedPropertyType == 'PG'
+              ? '$_numberOfBeds Beds'
+              : _selectedBHK,
           monthlyRent: rentAmount,
           securityDeposit: securityDeposit,
           ownerId: currentUserId,
@@ -356,29 +380,20 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
 
         print('✅ Agreement PDF generated: ${agreementPdf.path}');
 
-        // Upload PDF to Cloudinary
-        print('☁️ Uploading agreement PDF to Cloudinary...');
+        // ⭐ Upload PDF to Supabase (replaces Cloudinary)
+        print('☁️ Uploading agreement PDF to Supabase...');
 
-        final agreementUploadResult = await _cloudinaryService.uploadDocument(
-          agreementPdf,
-          folder: 'properties/agreements',
-          documentType: 'rental_agreement',
-          userId: currentUserId,
-          tags: ['agreement', 'rental', currentUserId, DateTime.now().millisecondsSinceEpoch.toString()],
-          metadata: {
-            'property_id': DateTime.now().millisecondsSinceEpoch.toString(),
-            'property_title': _propertyNameController.text.trim(),
-            'owner_id': currentUserId,
-            'owner_name': _ownerNameController.text.trim(),
-          },
+        agreementUrl = await SupabaseStorageService.uploadAgreementPDF(
+          pdfFile: agreementPdf,
+          propertyId: DateTime.now().millisecondsSinceEpoch.toString(),
         );
 
-        if (agreementUploadResult == null || agreementUploadResult['url'] == null) {
+        if (agreementUrl == null || agreementUrl.isEmpty) {
           throw Exception('Failed to upload agreement PDF');
         }
 
-        agreementUrl = agreementUploadResult['url'];
         print('✅ Agreement PDF uploaded: $agreementUrl');
+        print('🎉 PDF URL (opens directly in browser): $agreementUrl');
 
         // Delete local PDF file
         try {
@@ -395,6 +410,24 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         throw Exception('Failed to generate agreement: $e');
       }
 
+      // ⭐ UPLOAD PROPERTY IMAGES TO SUPABASE
+      print('');
+      print('📸 Uploading ${_propertyImages.length} property images to Supabase...');
+
+      List<String> imageUrls = [];
+
+      try {
+        imageUrls = await SupabaseStorageService.uploadMultipleImages(
+          images: _propertyImages,
+          ownerId: currentUserId,
+        );
+        print('✅ Uploaded ${imageUrls.length} images');
+      } catch (e) {
+        print('⚠️ Some images failed to upload: $e');
+        // Continue even if some images fail
+      }
+
+      // Prepare property data
       List<String> selectedAmenities = _amenities.entries
           .where((entry) => entry.value)
           .map((entry) => entry.key)
@@ -403,24 +436,13 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
       print('');
       print('⭐⭐⭐ PROPERTY DATA PREPARATION ⭐⭐⭐');
       print('Property Type: $_selectedPropertyType');
-
-      if (_selectedPropertyType == 'PG') {
-        print('🏠 Rooms (informational): $_numberOfRooms');
-        print('🛏️ Beds (for payment): $_numberOfBeds');
-        print('💰 Payment calculation: $_numberOfBeds beds × ₹18 = ₹${_numberOfBeds * 18}');
-      } else {
-        print('🏢 BHK: $_selectedBHK');
-        final bhkNumber = int.tryParse(_selectedBHK.split(' ')[0]) ?? 1;
-        print('💰 Payment calculation: $bhkNumber × ₹18 = ₹${bhkNumber * 18}');
-      }
       print('📝 Signature URL: $signatureUrl');
       print('📄 Agreement URL: $agreementUrl');
       print('⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐');
-      print('');
 
       final propertyData = {
         'id': DateTime.now().millisecondsSinceEpoch.toString(),
-        'ownerName': _ownerNameController.text.trim(), // ⭐ NEW
+        'ownerName': _ownerNameController.text.trim(),
         'title': _propertyNameController.text.trim(),
         'price': '₹${_rentController.text.trim()}',
         'location': '${_cityController.text.trim()}, ${_stateController.text.trim()}',
@@ -431,18 +453,16 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         'beds': _selectedPropertyType == 'PG' ? _numberOfBeds : null,
         'rooms': _selectedPropertyType == 'PG' ? _numberOfRooms : null,
         'amenities': selectedAmenities,
-        'images': _propertyImages,
+        'images': imageUrls.isNotEmpty ? imageUrls : _propertyImages, // Use URLs if uploaded
         'address': _addressController.text.trim(),
         'city': _cityController.text.trim(),
         'state': _stateController.text.trim(),
         'zipCode': _zipCodeController.text.trim(),
-        'signatureUrl': signatureUrl, // ⭐ NEW
-        'agreementUrl': agreementUrl, // ⭐ NEW: Agreement PDF URL
+        'signatureUrl': signatureUrl,
+        'agreementUrl': agreementUrl,
       };
 
       print('✅ Property data prepared for payment screen');
-
-      print('🚀 Navigating to PropertyPaymentScreen...');
 
       final result = await Navigator.push(
         context,
@@ -463,19 +483,18 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
 
         if (result == true) {
           print('✅ Payment successful! Property added.');
-          print('🧹 Cleaning up temporary images...');
+
+          // Cleanup temp files
           for (var file in _propertyImages) {
             try {
               if (await file.exists()) {
                 await file.delete();
-                print('🗑️ Deleted: ${file.path}');
               }
             } catch (e) {
               print('⚠️ Could not delete temp file: $e');
             }
           }
 
-          // ⭐ NEW: Cleanup signature temp file
           if (_signatureImage != null && await _signatureImage!.exists()) {
             await _signatureImage!.delete();
           }

@@ -11,6 +11,9 @@ class TenantCardWidget extends StatelessWidget {
   final VoidCallback onCall;
   final VoidCallback onEmail;
 
+  // ⭐ NEW: Agreement URL from property
+  final String? agreementUrl;
+
   const TenantCardWidget({
     Key? key,
     required this.tenant,
@@ -18,52 +21,57 @@ class TenantCardWidget extends StatelessWidget {
     required this.onDelete,
     required this.onCall,
     required this.onEmail,
+    this.agreementUrl, // ⭐ Optional - passed from PeopleScreen
   }) : super(key: key);
 
-  /// ⭐ Launch phone dialer
   Future<void> _makePhoneCall(String phoneNumber) async {
-    // Clean phone number (remove spaces, dashes, etc.)
     final cleanNumber = phoneNumber.replaceAll(RegExp(r'[^\d+]'), '');
-    final Uri launchUri = Uri(
-      scheme: 'tel',
-      path: cleanNumber,
-    );
+    final Uri launchUri = Uri(scheme: 'tel', path: cleanNumber);
     try {
-      print('📞 Attempting to launch: $launchUri');
-      await launchUrl(
-        launchUri,
-        mode: LaunchMode.externalApplication,
-      );
-      print('✅ Phone dialer launched successfully');
+      await launchUrl(launchUri, mode: LaunchMode.externalApplication);
     } catch (e) {
       print('❌ Error launching phone dialer: $e');
     }
   }
 
-  /// ⭐ Launch email client
   Future<void> _sendEmail(String email) async {
     final Uri launchUri = Uri(
       scheme: 'mailto',
       path: email,
-      query: 'subject=Regarding Your Tenancy', // Optional: Add default subject
+      query: 'subject=Regarding Your Tenancy',
     );
     try {
-      print('📧 Attempting to launch: $launchUri');
-      await launchUrl(
-        launchUri,
-        mode: LaunchMode.externalApplication,
-      );
-      print('✅ Email client launched successfully');
+      await launchUrl(launchUri, mode: LaunchMode.externalApplication);
     } catch (e) {
       print('❌ Error launching email client: $e');
     }
   }
 
-  /// ⭐ FIXED: Convert camelCase keys to snake_case for viewer compatibility
+  // ⭐ Open agreement PDF
+  Future<void> _openAgreement(BuildContext context, String url) async {
+    try {
+      print('📄 Opening agreement: $url');
+      final uri = Uri.parse(url);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        throw Exception('Could not launch URL');
+      }
+    } catch (e) {
+      print('❌ Error opening agreement: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to open agreement: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   Map<String, dynamic> _normalizeDocuments(Map<String, dynamic> docs) {
     final Map<String, dynamic> normalized = {};
-
-    // Mapping from camelCase (upload) to snake_case (viewer)
     final Map<String, String> keyMapping = {
       'idProof': 'id_proof',
       'addressProof': 'address_proof',
@@ -71,52 +79,30 @@ class TenantCardWidget extends StatelessWidget {
       'employmentLetter': 'employment_letter',
       'bankStatement': 'bank_statement',
       'other': 'other',
-      // Also support if already in snake_case
       'id_proof': 'id_proof',
       'address_proof': 'address_proof',
       'income_proof': 'income_proof',
       'employment_letter': 'employment_letter',
       'bank_statement': 'bank_statement',
     };
-
     docs.forEach((key, value) {
       final normalizedKey = keyMapping[key] ?? key;
       normalized[normalizedKey] = value;
     });
-
-    print('📋 Normalized documents:');
-    print('   Input: $docs');
-    print('   Output: $normalized');
-
     return normalized;
   }
 
   @override
   Widget build(BuildContext context) {
-    print('═══════════════════════════════════════════════════════');
-    print('🔍 TENANT CARD - Building card for: ${tenant['name']}');
-
     final dues = (tenant['pendingDues'] as num? ?? 0).toDouble();
     final underNotice = tenant['underNotice'] as bool? ?? false;
 
-    // Get documents from tenant data
     Map<String, dynamic> rawDocuments = {};
-
-    if (tenant['documents'] != null) {
-      if (tenant['documents'] is Map) {
-        rawDocuments = Map<String, dynamic>.from(tenant['documents']);
-        print('✅ Found documents: ${rawDocuments.keys.toList()}');
-      } else {
-        print('⚠️ documents field is not a Map: ${tenant['documents'].runtimeType}');
-      }
-    } else {
-      print('⚠️ No documents field found');
+    if (tenant['documents'] != null && tenant['documents'] is Map) {
+      rawDocuments = Map<String, dynamic>.from(tenant['documents']);
     }
-
-    // ⭐ Normalize document keys for viewer compatibility
     final documents = _normalizeDocuments(rawDocuments);
 
-    // Count valid documents
     int uploadedDocsCount = 0;
     documents.forEach((key, value) {
       if (value != null) {
@@ -126,15 +112,14 @@ class TenantCardWidget extends StatelessWidget {
             valueStr.length > 10 &&
             (valueStr.startsWith('http://') || valueStr.startsWith('https://'))) {
           uploadedDocsCount++;
-          print('✅ Valid document "$key": ${valueStr.substring(0, 50)}...');
-        } else {
-          print('❌ Invalid document "$key": $valueStr');
         }
       }
     });
 
-    print('📈 RESULT: $uploadedDocsCount valid documents');
-    print('═══════════════════════════════════════════════════════');
+    // ⭐ Check if agreement URL is valid
+    final hasAgreement = agreementUrl != null &&
+        agreementUrl!.isNotEmpty &&
+        agreementUrl!.startsWith('http');
 
     return Container(
       margin: EdgeInsets.only(bottom: 2.h),
@@ -156,7 +141,7 @@ class TenantCardWidget extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Tenant Header
+          // ── Tenant Header ──
           Row(
             children: [
               Container(
@@ -191,42 +176,32 @@ class TenantCardWidget extends StatelessWidget {
                   ],
                 ),
               ),
-              // Phone Icon - ⭐ UPDATED to launch dialer
               if (tenant['phone'] != null && (tenant['phone'] as String).isNotEmpty)
                 IconButton(
                   icon: Icon(Icons.phone, color: Colors.green, size: 5.w),
                   padding: EdgeInsets.all(2.w),
                   constraints: BoxConstraints(),
                   onPressed: () {
-                    final phone = tenant['phone'] as String;
-                    print('📞 Launching phone dialer for: $phone');
-                    _makePhoneCall(phone);
-                    onCall(); // Keep original callback if needed
+                    _makePhoneCall(tenant['phone'] as String);
+                    onCall();
                   },
                 ),
-              // Email Icon - ⭐ UPDATED to launch email client
               if (tenant['email'] != null && (tenant['email'] as String).isNotEmpty)
                 IconButton(
                   icon: Icon(Icons.email, color: Colors.blue, size: 5.w),
                   padding: EdgeInsets.all(2.w),
                   constraints: BoxConstraints(),
                   onPressed: () {
-                    final email = tenant['email'] as String;
-                    print('📧 Launching email client for: $email');
-                    _sendEmail(email);
-                    onEmail(); // Keep original callback if needed
+                    _sendEmail(tenant['email'] as String);
+                    onEmail();
                   },
                 ),
-              // More Menu
               PopupMenuButton<String>(
                 icon: Icon(Icons.more_vert, color: Colors.grey.shade700, size: 5.w),
                 padding: EdgeInsets.all(2.w),
                 onSelected: (value) {
-                  if (value == 'edit_rent') {
-                    onEditRent();
-                  } else if (value == 'delete') {
-                    onDelete();
-                  }
+                  if (value == 'edit_rent') onEditRent();
+                  else if (value == 'delete') onDelete();
                 },
                 itemBuilder: (context) => [
                   PopupMenuItem(
@@ -235,10 +210,7 @@ class TenantCardWidget extends StatelessWidget {
                       children: [
                         Icon(Icons.edit, color: AppTheme.primaryLight, size: 5.w),
                         SizedBox(width: 2.w),
-                        Text(
-                          'Edit Rent',
-                          style: TextStyle(color: AppTheme.primaryLight),
-                        ),
+                        Text('Edit Rent', style: TextStyle(color: AppTheme.primaryLight)),
                       ],
                     ),
                   ),
@@ -248,10 +220,7 @@ class TenantCardWidget extends StatelessWidget {
                       children: [
                         Icon(Icons.delete, color: Colors.red, size: 5.w),
                         SizedBox(width: 2.w),
-                        Text(
-                          'Remove Tenant',
-                          style: TextStyle(color: Colors.red),
-                        ),
+                        Text('Remove Tenant', style: TextStyle(color: Colors.red)),
                       ],
                     ),
                   ),
@@ -261,7 +230,7 @@ class TenantCardWidget extends StatelessWidget {
           ),
           SizedBox(height: 2.h),
 
-          // Property Info with Room Number & Occupancy
+          // ── Property Info ──
           Container(
             padding: EdgeInsets.all(2.w),
             decoration: BoxDecoration(
@@ -271,7 +240,6 @@ class TenantCardWidget extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Property Title
                 Row(
                   children: [
                     Icon(Icons.home, size: 4.w, color: AppTheme.primaryLight),
@@ -288,17 +256,17 @@ class TenantCardWidget extends StatelessWidget {
                     ),
                   ],
                 ),
-
-                // ⭐ Room Number & Occupancy Type
-                if ((tenant['roomNumber'] != null && tenant['roomNumber'].toString().isNotEmpty) ||
-                    (tenant['occupancyType'] != null && tenant['occupancyType'].toString().isNotEmpty)) ...[
+                if ((tenant['roomNumber'] != null &&
+                    tenant['roomNumber'].toString().isNotEmpty) ||
+                    (tenant['occupancyType'] != null &&
+                        tenant['occupancyType'].toString().isNotEmpty)) ...[
                   SizedBox(height: 1.h),
                   Divider(height: 1, color: Colors.grey.shade300),
                   SizedBox(height: 1.h),
                   Row(
                     children: [
-                      // Room Number
-                      if (tenant['roomNumber'] != null && tenant['roomNumber'].toString().isNotEmpty)
+                      if (tenant['roomNumber'] != null &&
+                          tenant['roomNumber'].toString().isNotEmpty)
                         Expanded(
                           child: Row(
                             children: [
@@ -308,31 +276,24 @@ class TenantCardWidget extends StatelessWidget {
                                   color: Colors.blue.shade50,
                                   borderRadius: BorderRadius.circular(6),
                                 ),
-                                child: Icon(
-                                  Icons.meeting_room,
-                                  color: Colors.blue.shade700,
-                                  size: 4.w,
-                                ),
+                                child: Icon(Icons.meeting_room,
+                                    color: Colors.blue.shade700, size: 4.w),
                               ),
                               SizedBox(width: 2.w),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      'Room',
-                                      style: TextStyle(
-                                        fontSize: 8.sp,
-                                        color: Colors.grey.shade600,
-                                      ),
-                                    ),
+                                    Text('Room',
+                                        style: TextStyle(
+                                            fontSize: 8.sp,
+                                            color: Colors.grey.shade600)),
                                     Text(
                                       tenant['roomNumber'].toString(),
                                       style: TextStyle(
-                                        fontSize: 10.sp,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.blue.shade700,
-                                      ),
+                                          fontSize: 10.sp,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.blue.shade700),
                                     ),
                                   ],
                                 ),
@@ -340,16 +301,8 @@ class TenantCardWidget extends StatelessWidget {
                             ],
                           ),
                         ),
-
-                      // Spacer if both exist
-                      if (tenant['roomNumber'] != null &&
-                          tenant['roomNumber'].toString().isNotEmpty &&
-                          tenant['occupancyType'] != null &&
+                      if (tenant['occupancyType'] != null &&
                           tenant['occupancyType'].toString().isNotEmpty)
-                        SizedBox(width: 3.w),
-
-                      // Occupancy Type
-                      if (tenant['occupancyType'] != null && tenant['occupancyType'].toString().isNotEmpty)
                         Expanded(
                           child: Row(
                             children: [
@@ -359,31 +312,24 @@ class TenantCardWidget extends StatelessWidget {
                                   color: Colors.green.shade50,
                                   borderRadius: BorderRadius.circular(6),
                                 ),
-                                child: Icon(
-                                  Icons.people,
-                                  color: Colors.green.shade700,
-                                  size: 4.w,
-                                ),
+                                child: Icon(Icons.people,
+                                    color: Colors.green.shade700, size: 4.w),
                               ),
                               SizedBox(width: 2.w),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      'Occupancy',
-                                      style: TextStyle(
-                                        fontSize: 8.sp,
-                                        color: Colors.grey.shade600,
-                                      ),
-                                    ),
+                                    Text('Occupancy',
+                                        style: TextStyle(
+                                            fontSize: 8.sp,
+                                            color: Colors.grey.shade600)),
                                     Text(
                                       tenant['occupancyType'].toString(),
                                       style: TextStyle(
-                                        fontSize: 10.sp,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.green.shade700,
-                                      ),
+                                          fontSize: 10.sp,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.green.shade700),
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   ],
@@ -398,23 +344,99 @@ class TenantCardWidget extends StatelessWidget {
               ],
             ),
           ),
-
           SizedBox(height: 2.h),
 
-          // ⭐ Agreement Button - NEW PROMINENT DESIGN
+          // ⭐⭐⭐ RENTAL AGREEMENT SECTION ⭐⭐⭐
+          Container(
+            padding: EdgeInsets.all(3.w),
+            decoration: BoxDecoration(
+              color: hasAgreement ? Colors.green.shade50 : Colors.orange.shade50,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: hasAgreement ? Colors.green.shade200 : Colors.orange.shade200,
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: EdgeInsets.all(2.w),
+                  decoration: BoxDecoration(
+                    color: hasAgreement
+                        ? Colors.green.withOpacity(0.1)
+                        : Colors.orange.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    hasAgreement ? Icons.description : Icons.description_outlined,
+                    color: hasAgreement ? Colors.green.shade700 : Colors.orange.shade700,
+                    size: 6.w,
+                  ),
+                ),
+                SizedBox(width: 3.w),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Rental Agreement',
+                        style: TextStyle(
+                          fontSize: 11.sp,
+                          fontWeight: FontWeight.w600,
+                          color: hasAgreement
+                              ? Colors.green.shade900
+                              : Colors.orange.shade900,
+                        ),
+                      ),
+                      SizedBox(height: 0.3.h),
+                      Text(
+                        hasAgreement
+                            ? 'Tap to view agreement'
+                            : 'No agreement available',
+                        style: TextStyle(
+                          fontSize: 9.sp,
+                          color: hasAgreement
+                              ? Colors.green.shade700
+                              : Colors.orange.shade700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (hasAgreement)
+                  ElevatedButton.icon(
+                    onPressed: () => _openAgreement(context, agreementUrl!),
+                    icon: Icon(Icons.open_in_new, size: 4.w),
+                    label: Text(
+                      'View',
+                      style: TextStyle(fontSize: 10.sp),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
+                      padding: EdgeInsets.symmetric(
+                          horizontal: 3.w, vertical: 1.h),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          SizedBox(height: 2.h),
+
+          // ── Documents Button ──
           Material(
             color: Colors.transparent,
             child: InkWell(
               onTap: () {
-                print('👆 Agreement button tapped - Navigating with $uploadedDocsCount documents');
-
                 Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (context) => TenantDocumentsViewerScreen(
                       tenantName: tenant['name'] as String,
                       tenantEmail: tenant['email'] as String,
-                      documents: documents, // ⭐ Pass normalized documents
+                      documents: documents,
                     ),
                   ),
                 );
@@ -435,29 +457,27 @@ class TenantCardWidget extends StatelessWidget {
                     end: Alignment.bottomRight,
                   ),
                   borderRadius: BorderRadius.circular(10),
-                  boxShadow: uploadedDocsCount > 0 ? [
+                  boxShadow: uploadedDocsCount > 0
+                      ? [
                     BoxShadow(
                       color: Colors.blue.withOpacity(0.3),
                       blurRadius: 8,
                       offset: Offset(0, 4),
                     ),
-                  ] : [],
+                  ]
+                      : [],
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(
-                      Icons.description_outlined,
-                      color: Colors.white,
-                      size: 6.w,
-                    ),
+                    Icon(Icons.folder_outlined, color: Colors.white, size: 6.w),
                     SizedBox(width: 3.w),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'View Agreement & Documents',
+                            'Tenant Documents',
                             style: TextStyle(
                               fontSize: 11.sp,
                               fontWeight: FontWeight.bold,
@@ -477,18 +497,14 @@ class TenantCardWidget extends StatelessWidget {
                         ],
                       ),
                     ),
-                    Icon(
-                      Icons.arrow_forward_ios,
-                      size: 4.5.w,
-                      color: Colors.white,
-                    ),
+                    Icon(Icons.arrow_forward_ios, size: 4.5.w, color: Colors.white),
                   ],
                 ),
               ),
             ),
           ),
 
-          // Pending Dues Section
+          // ── Dues ──
           if (dues > 0) ...[
             SizedBox(height: 2.h),
             Container(
@@ -515,7 +531,7 @@ class TenantCardWidget extends StatelessWidget {
             ),
           ],
 
-          // Under Notice Section
+          // ── Under Notice ──
           if (underNotice) ...[
             SizedBox(height: 1.h),
             Container(
@@ -542,7 +558,7 @@ class TenantCardWidget extends StatelessWidget {
             ),
           ],
 
-          // Lease Info
+          // ── Lease Info ──
           SizedBox(height: 1.h),
           Row(
             children: [
@@ -550,18 +566,12 @@ class TenantCardWidget extends StatelessWidget {
               SizedBox(width: 2.w),
               Text(
                 'Move-in: ${tenant['moveInDate']}',
-                style: TextStyle(
-                  color: Colors.grey.shade600,
-                  fontSize: 9.sp,
-                ),
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 9.sp),
               ),
               Spacer(),
               Text(
                 '${tenant['leaseDuration']} months lease',
-                style: TextStyle(
-                  color: Colors.grey.shade600,
-                  fontSize: 9.sp,
-                ),
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 9.sp),
               ),
             ],
           ),

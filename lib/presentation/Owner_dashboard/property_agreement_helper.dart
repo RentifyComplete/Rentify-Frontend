@@ -8,26 +8,12 @@ class PropertyAgreementHelper {
   final AgreementPdfService _pdfService = AgreementPdfService();
   final AuthService _authService = AuthService();
 
-  // ⭐⭐⭐ CLOUDINARY CONFIGURATION - UPDATE THESE VALUES ⭐⭐⭐
-  //
-  // Option 1: Use your existing Cloudinary config if you already have one
-  // Option 2: Create a new unsigned upload preset (see instructions below)
-  //
-  // TO GET YOUR CLOUDINARY CREDENTIALS:
-  // 1. Go to https://cloudinary.com/console
-  // 2. Your Cloud Name is shown at the top (e.g., "dxxxxx")
-  // 3. Go to Settings → Upload → Upload presets
-  // 4. Create an unsigned preset or use an existing one
+  // ⭐ SUPABASE CONFIGURATION
+  static const String supabaseUrl = 'https://sysgayeogkjjulqkzaee.supabase.co';   // ⭐ REPLACE
+  static const String supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN5c2dheWVvZ2tqanVscWt6YWVlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEzMTQ3ODQsImV4cCI6MjA4Njg5MDc4NH0.T2NHV4iX7ih2rqzMX35HPeKFSeplKSzDI2PuByXuWGU';                // ⭐ REPLACE
+  static const String bucketName = 'rentify-files';                      // ⭐ your bucket name
 
-  static const String cloudName = 'dojen4kyp';  // ⭐ REPLACE THIS
-  static const String uploadPreset = 'rental_agreements_unsigned';  // ⭐ REPLACE THIS
-
-  // Alternative: If you want to use signed uploads with API key and secret
-  // Uncomment and use these instead:
-  // static const String apiKey = 'YOUR_API_KEY';
-  // static const String apiSecret = 'YOUR_API_SECRET';
-
-  /// Generate agreement for a property and upload to Cloudinary
+  /// Generate agreement for a property and upload to Supabase
   Future<String?> generateAndUploadAgreement({
     required String propertyId,
     required String ownerName,
@@ -69,16 +55,16 @@ class PropertyAgreementHelper {
 
       print('✅ PDF generated: ${pdfFile.path}');
 
-      // Step 2: Upload to Cloudinary
-      print('☁️ Uploading to Cloudinary...');
-      final agreementUrl = await _uploadToCloudinary(pdfFile);
+      // Step 2: Upload to Supabase
+      print('☁️ Uploading to Supabase...');
+      final agreementUrl = await _uploadToSupabase(pdfFile, propertyId);
 
       if (agreementUrl == null) {
-        print('❌ Failed to upload to Cloudinary');
+        print('❌ Failed to upload to Supabase');
         return null;
       }
 
-      print('✅ Uploaded to Cloudinary: $agreementUrl');
+      print('✅ Uploaded to Supabase: $agreementUrl');
 
       // Step 3: Update property with agreement URL
       print('💾 Updating property with agreement URL...');
@@ -86,7 +72,6 @@ class PropertyAgreementHelper {
 
       if (!updated) {
         print('⚠️ Failed to update property with agreement URL');
-        // Return URL anyway, as the PDF was generated and uploaded successfully
         return agreementUrl;
       }
 
@@ -108,65 +93,51 @@ class PropertyAgreementHelper {
     }
   }
 
-  /// Upload PDF to Cloudinary
-  Future<String?> _uploadToCloudinary(File pdfFile) async {
+  /// Upload PDF to Supabase Storage
+  Future<String?> _uploadToSupabase(File pdfFile, String propertyId) async {
     try {
-      // Validate configuration
-      if (cloudName == 'YOUR_CLOUD_NAME' || uploadPreset == 'YOUR_UPLOAD_PRESET') {
-        print('❌ CLOUDINARY NOT CONFIGURED!');
-        print('   Please update cloudName and uploadPreset in property_agreement_helper.dart');
-        throw Exception('Cloudinary credentials not configured. Please update cloudName and uploadPreset.');
-      }
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final fileName = 'agreement_${propertyId}_$timestamp.pdf';
+      final storagePath = '$fileName'; // or 'agreements/$fileName' if you want a subfolder
 
-      final url = Uri.parse('https://api.cloudinary.com/v1_1/$cloudName/upload');
+      print('📤 Uploading to Supabase Storage...');
+      print('   Bucket: $bucketName');
+      print('   Path: $storagePath');
+      print('   File size: ${await pdfFile.length()} bytes');
 
-      var request = http.MultipartRequest('POST', url);
-      request.fields['upload_preset'] = uploadPreset;
-      request.fields['folder'] = 'rental_agreements';
-      request.fields['resource_type'] = 'raw'; // For PDF files
+      final uploadUrl = Uri.parse(
+        '$supabaseUrl/storage/v1/object/$bucketName/$storagePath',
+      );
 
-      // Add the PDF file
-      request.files.add(await http.MultipartFile.fromPath(
-        'file',
-        pdfFile.path,
-      ));
+      final bytes = await pdfFile.readAsBytes();
 
-      print('📤 Sending request to Cloudinary...');
-      print('   Cloud Name: $cloudName');
-      print('   Upload Preset: $uploadPreset');
-      print('   File Size: ${await pdfFile.length()} bytes');
+      final response = await http.post(
+        uploadUrl,
+        headers: {
+          'Authorization': 'Bearer $supabaseAnonKey',
+          'Content-Type': 'application/pdf',
+          'x-upsert': 'true', // overwrite if same name exists
+        },
+        body: bytes,
+      ).timeout(const Duration(seconds: 60));
 
-      final streamedResponse = await request.send();
-      final response = await http.Response.fromStream(streamedResponse);
+      print('📥 Supabase Response Status: ${response.statusCode}');
+      print('📥 Supabase Response Body: ${response.body}');
 
-      print('📥 Cloudinary Response Status: ${response.statusCode}');
-      print('📥 Cloudinary Response Body: ${response.body}');
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        // Build the public URL
+        final publicUrl =
+            '$supabaseUrl/storage/v1/object/public/$bucketName/$storagePath';
 
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final secureUrl = data['secure_url'] as String?;
-
-        if (secureUrl != null) {
-          print('✅ PDF uploaded successfully: $secureUrl');
-          return secureUrl;
-        } else {
-          print('❌ No secure_url in response');
-          return null;
-        }
-      } else if (response.statusCode == 401) {
-        print('❌ CLOUDINARY AUTHENTICATION FAILED');
-        print('   This usually means:');
-        print('   1. Invalid upload preset name');
-        print('   2. Upload preset is not set to "Unsigned"');
-        print('   3. Cloud name is incorrect');
-        print('   Please check your Cloudinary dashboard settings');
-        return null;
+        print('✅ PDF uploaded successfully: $publicUrl');
+        return publicUrl;
       } else {
         print('❌ Upload failed with status: ${response.statusCode}');
+        print('   Body: ${response.body}');
         return null;
       }
     } catch (e, stackTrace) {
-      print('❌ Error uploading to Cloudinary: $e');
+      print('❌ Error uploading to Supabase: $e');
       print('Stack trace: $stackTrace');
       return null;
     }
@@ -194,12 +165,10 @@ class PropertyAgreementHelper {
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-
         if (data['success'] == false) {
           print('❌ Backend returned success: false');
           return false;
         }
-
         return true;
       } else {
         print('❌ Update failed with status: ${response.statusCode}');
@@ -217,7 +186,6 @@ class PropertyAgreementHelper {
     try {
       print('🔄 Regenerating agreement for property: ${property['_id']}');
 
-      // Extract property details
       final propertyId = property['_id']?.toString() ?? '';
       final propertyTitle = property['title']?.toString() ?? 'Unnamed Property';
       final propertyType = property['type']?.toString() ?? 'Flat';
@@ -229,7 +197,6 @@ class PropertyAgreementHelper {
       final securityDeposit = (property['securityDeposit'] as num?)?.toDouble() ?? 0;
       final ownerId = property['ownerId']?.toString() ?? '';
 
-      // Determine BHK or Beds
       String bhkOrBeds;
       if (propertyType == 'PG') {
         final beds = property['beds']?.toString() ?? '1';
@@ -238,13 +205,11 @@ class PropertyAgreementHelper {
         bhkOrBeds = property['bhk']?.toString() ?? '1 BHK';
       }
 
-      // Get owner details - you may need to fetch this from AuthService or pass it
       final ownerName = property['ownerName']?.toString() ?? 'Property Owner';
       final ownerSignatureUrl = property['ownerSignatureUrl']?.toString() ?? '';
       final ownerPanCard = property['ownerPanCard']?.toString();
       final ownerAadhar = property['ownerAadhar']?.toString();
 
-      // Generate and upload
       return await generateAndUploadAgreement(
         propertyId: propertyId,
         ownerName: ownerName,

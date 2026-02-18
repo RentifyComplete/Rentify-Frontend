@@ -743,6 +743,8 @@ class _PeopleScreenState extends State<PeopleScreen> with SingleTickerProviderSt
 
     for (var booking in allBookings) {
       print('📋 Processing booking: ${booking['_id']}');
+      print('   ALL FIELDS: ${booking.keys.toList()}');
+      print('   propertyId: ${booking['propertyId']}');
       print('   Status: ${booking['status']}');
       print('   Tenant: ${booking['tenantName']}');
       print('   Email: ${booking['tenantEmail']}');
@@ -790,6 +792,7 @@ class _PeopleScreenState extends State<PeopleScreen> with SingleTickerProviderSt
         'documents': booking['tenantDocuments'] ?? booking['documents'] ?? {},
         'roomNumber': booking['roomNumber'],
         'occupancyType': booking['occupancyType'],
+        'agreementUrl': property.isNotEmpty ? property['agreementUrl'] : null, // ⭐ ADD THIS LINE
       };
 
       tenants.add(tenant);
@@ -1592,6 +1595,7 @@ class _PeopleScreenState extends State<PeopleScreen> with SingleTickerProviderSt
   Widget _buildTenantCard(Map<String, dynamic> tenant) {
     return TenantCardWidget(
       tenant: tenant,
+      agreementUrl: tenant['agreementUrl'],  // ⭐ ADD THIS LINE
       onEditRent: () => _editTenantRent(tenant),
       onDelete: () => _deleteTenant(tenant),
       onCall: () {

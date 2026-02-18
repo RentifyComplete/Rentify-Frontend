@@ -548,55 +548,79 @@ class _PropertyPaymentScreenState extends State<PropertyPaymentScreen> {
   Future<Map<String, dynamic>> _uploadProperty() async {
     try {
       print('📤 ==================== UPLOAD PROPERTY ====================');
-      print('📋 Property data:');
-      widget.propertyData.forEach((key, value) {
-        if (key != 'images') {
-          print('   $key: $value');
-        } else {
-          print('   images: ${(value as List).length} file(s) in persistent storage');
-        }
-      });
-      print('📤 ==============================================================');
-
       final propertyData = widget.propertyData;
-
-      // Images are already in persistent storage from AddPropertyScreen
-      final imageFiles = propertyData['images'] as List<File>;
-
-      // Verify all files exist
-      print('🔍 Verifying ${imageFiles.length} images...');
-      for (var img in imageFiles) {
-        if (!await img.exists()) {
-          throw Exception('Image file missing: ${img.path}');
-        }
-        print('✅ Verified: ${path.basename(img.path)}');
-      }
 
       // Parse price
       String priceStr = propertyData['price']?.toString() ?? '0';
       priceStr = priceStr.replaceAll('₹', '').replaceAll(',', '').trim();
 
-      print('📤 Uploading property to backend...');
-      final result = await _backendService.uploadProperty(
-        title: propertyData['title'] ?? '',
-        price: priceStr,
-        location: propertyData['location'] ?? '',
-        description: propertyData['description'] ?? '',
-        ownerId: propertyData['ownerId'] ?? '',
-        type: propertyData['type'] ?? '',
-        bhk: propertyData['bhk'],
-        beds: propertyData['beds'],
-        rooms: propertyData['rooms'],  // ⭐ ADD THIS LINE
-        amenities: List<String>.from(propertyData['amenities'] ?? []),
-        images: imageFiles,
-        address: propertyData['address'] ?? '',
-        city: propertyData['city'] ?? '',
-        state: propertyData['state'] ?? '',
-        zipCode: propertyData['zipCode'] ?? '',
-      );
+      final rawImages = propertyData['images'] as List? ?? [];
 
-      print('📥 Upload result: ${result['success']}');
-      return result;
+      // ✅ DETECT: Are images Supabase URLs (strings) or File objects?
+      final bool isUrlList = rawImages.isNotEmpty && rawImages.first is String;
+
+      if (isUrlList) {
+        // ✅ NEW PATH: Images are already uploaded to Supabase as URLs
+        final imageUrls = rawImages.cast<String>();
+        print('🌐 Using ${imageUrls.length} Supabase URLs');
+
+        final result = await _backendService.uploadPropertyWithUrls(
+          title: propertyData['title'] ?? '',
+          price: priceStr,
+          location: propertyData['location'] ?? '',
+          description: propertyData['description'] ?? '',
+          ownerId: propertyData['ownerId'] ?? '',
+          type: propertyData['type'] ?? '',
+          bhk: propertyData['bhk'],
+          beds: propertyData['beds'],
+          rooms: propertyData['rooms'],
+          amenities: List<String>.from(propertyData['amenities'] ?? []),
+          imageUrls: imageUrls,
+          address: propertyData['address'] ?? '',
+          city: propertyData['city'] ?? '',
+          state: propertyData['state'] ?? '',
+          zipCode: propertyData['zipCode'] ?? '',
+          agreementUrl: propertyData['agreementUrl'],  // ✅ ADD THIS
+          signatureUrl: propertyData['signatureUrl'],  // ✅ ADD THIS
+          ownerName: propertyData['ownerName'],
+        );
+
+        print('📥 Upload result: ${result['success']}');
+        return result;
+
+      } else {
+        // ✅ OLD PATH: Images are File objects (fallback)
+        final imageFiles = rawImages.cast<File>();
+        print('📁 Using ${imageFiles.length} local File objects');
+
+        // Verify all files exist
+        for (var img in imageFiles) {
+          if (!await img.exists()) {
+            throw Exception('Image file missing: ${img.path}');
+          }
+        }
+
+        final result = await _backendService.uploadProperty(
+          title: propertyData['title'] ?? '',
+          price: priceStr,
+          location: propertyData['location'] ?? '',
+          description: propertyData['description'] ?? '',
+          ownerId: propertyData['ownerId'] ?? '',
+          type: propertyData['type'] ?? '',
+          bhk: propertyData['bhk'],
+          beds: propertyData['beds'],
+          rooms: propertyData['rooms'],
+          amenities: List<String>.from(propertyData['amenities'] ?? []),
+          images: imageFiles,
+          address: propertyData['address'] ?? '',
+          city: propertyData['city'] ?? '',
+          state: propertyData['state'] ?? '',
+          zipCode: propertyData['zipCode'] ?? '',
+        );
+
+        print('📥 Upload result: ${result['success']}');
+        return result;
+      }
 
     } catch (e) {
       print('❌ Error uploading property: $e');

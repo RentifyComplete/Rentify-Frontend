@@ -12,6 +12,20 @@ import '../../models/user_model.dart';
 import '../Owner_registration/property_owner_registration.dart';
 import 'package:rentokpg/presentation/login_screen/forgot_password_screen.dart';
 
+// ── Design tokens ──────────────────────────────────────────────────────────
+class _C {
+  static const navy       = Color(0xFF0D1B2A);
+  static const navyMid    = Color(0xFF1A2E46);
+  static const blue       = Color(0xFF1B4F8A);
+  static const blueBright = Color(0xFF2463AE);
+  static const sky        = Color(0xFF4A90D9);
+  static const skyLight   = Color(0xFF7DB8F0);
+  static const offWhite   = Color(0xFFF4F7FC);
+  static const greyLine   = Color(0xFFE8EEF7);
+  static const greyText   = Color(0xFF8FA3BE);
+  static const white      = Color(0xFFFFFFFF);
+}
+
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -19,25 +33,26 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
+class _LoginScreenState extends State<LoginScreen>
+    with WidgetsBindingObserver {
   String _selectedUserType = 'tenant';
 
-  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _emailController    = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
-  final AuthService _authService = AuthService();
+  final AuthService    _authService    = AuthService();
   final SessionService _sessionService = SessionService();
 
   bool _isPasswordVisible = false;
-  bool _isLoading = false;
-  bool _rememberMe = true;
+  bool _isLoading         = false;
+  bool _rememberMe        = true;
   bool _isCheckingSession = true;
 
+  // ── Lifecycle ────────────────────────────────────────────────────────────
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    print('\n🚀 LoginScreen initialized');
     _checkExistingSession();
   }
 
@@ -50,502 +65,358 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      print('📱 App resumed on login screen');
-    }
-  }
+  void didChangeAppLifecycleState(AppLifecycleState state) {}
 
-  /// ✅ OPTIMIZED: Enhanced session check with timeout protection
+  // ── Session check ─────────────────────────────────────────────────────────
   Future<void> _checkExistingSession() async {
-    print('\n🔍 === CHECKING EXISTING SESSION ===');
-    
     try {
-      // Add timeout to prevent infinite loading
       await Future.any([
         _performSessionCheck(),
-        Future.delayed(const Duration(seconds: 5), () {
-          print('⏱️ Session check timeout (5s)');
-          throw TimeoutException('Session check took too long');
-        }),
+        Future.delayed(const Duration(seconds: 5),
+                () => throw TimeoutException('Session check took too long')),
       ]);
-    } on TimeoutException catch (e) {
-      print('⚠️ Session check timed out: $e');
-      // Continue to login screen
-    } catch (e, stackTrace) {
-      print('❌ Error checking session: $e');
-      print('Stack trace: $stackTrace');
-      // Continue to login screen on error
+    } on TimeoutException {
+      // continue to login
+    } catch (_) {
+      // continue to login
     } finally {
-      if (mounted) {
-        setState(() {
-          _isCheckingSession = false;
-        });
-        print('✅ Session check complete\n');
-      }
+      if (mounted) setState(() => _isCheckingSession = false);
     }
   }
 
-  /// Perform the actual session check
   Future<void> _performSessionCheck() async {
-    // Add small delay to ensure SharedPreferences is ready
     await Future.delayed(const Duration(milliseconds: 100));
-    
-    // Debug: Print current session data
     await _sessionService.debugPrintSessionData();
-    
-    // Check if session should be restored
-    final shouldRestore = await _sessionService.shouldRestoreSessionOnAppRestart();
-    print('Should restore session: $shouldRestore');
+    final shouldRestore =
+    await _sessionService.shouldRestoreSessionOnAppRestart();
 
     if (shouldRestore) {
-      print('✅ Attempting to restore session...');
-      
-      final user = await _sessionService.getCurrentUser();
+      final user  = await _sessionService.getCurrentUser();
       final token = await _sessionService.getToken();
 
-      if (user != null && token != null) {
-        print('✅ User and token found');
-        print('   Email: ${user.email}');
-        print('   Type: ${user.userType}');
-        
-        if (!mounted) {
-          print('⚠️ Widget not mounted, aborting');
-          return;
-        }
-
-        // Load user data to provider
-        final userProvider = Provider.of<UserProvider>(context, listen: false);
-
-        final userData = {
-          '_id': user.id?.toHexString() ?? '',
-          'id': user.id?.toHexString() ?? '',
-          'email': user.email,
-          'name': user.personalDetails['fullName'] ??
-              user.personalDetails['name'] ??
-              'User',
-          'phone': user.personalDetails['phone'] ?? '',
-          'role': user.userType,
-          'userType': user.userType,
-          'authToken': token,
+      if (user != null && token != null && mounted) {
+        final userProvider =
+        Provider.of<UserProvider>(context, listen: false);
+        userProvider.setUserData({
+          '_id'            : user.id?.toHexString() ?? '',
+          'id'             : user.id?.toHexString() ?? '',
+          'email'          : user.email,
+          'name'           : user.personalDetails['fullName'] ??
+              user.personalDetails['name'] ?? 'User',
+          'phone'          : user.personalDetails['phone'] ?? '',
+          'role'           : user.userType,
+          'userType'       : user.userType,
+          'authToken'      : token,
           'personalDetails': user.personalDetails,
-        };
-
-        userProvider.setUserData(userData);
-        print('✅ User data loaded to provider');
-
-        // Update last active timestamp
+        });
         await _sessionService.updateLastActive();
-
-        // Navigate to appropriate dashboard
-        final userType = user.userType == 'owner' ? 'owner' : 'tenant';
-        final route = userType == 'owner' ? '/owner-dashboard' : '/home-dashboard';
-
-        print('📍 Navigating to: $route');
-
-        // Small delay for smooth transition
         await Future.delayed(const Duration(milliseconds: 300));
-
         if (mounted) {
-          Navigator.pushReplacementNamed(context, route);
-          print('✅ Auto-login successful!');
+          Navigator.pushReplacementNamed(
+            context,
+            user.userType == 'owner' ? '/owner-dashboard' : '/home-dashboard',
+          );
         }
-        return;
-      } else {
-        print('⚠️ User or token is null');
-        print('   User: ${user != null}');
-        print('   Token: ${token != null}');
       }
     } else {
-      print('ℹ️ Session should not be restored');
-      // Clear session if Remember Me is disabled
       await _sessionService.clearSessionIfNotRemembered();
     }
   }
 
-  /// ✅ OPTIMIZED: Enhanced login with better validation and error handling
+  // ── Login ─────────────────────────────────────────────────────────────────
   Future<void> _handleLogin() async {
-    print('\n🔐 === HANDLING LOGIN ===');
     HapticFeedback.lightImpact();
-
-    // Validation
-    final email = _emailController.text.trim();
+    final email    = _emailController.text.trim();
     final password = _passwordController.text;
 
-    if (email.isEmpty) {
-      _showErrorSnackBar('Please enter your email');
-      return;
-    }
+    if (email.isEmpty)    return _showError('Please enter your email');
+    if (password.isEmpty) return _showError('Please enter your password');
+    if (!RegExp(r'^[\w\-\.]+@([\w\-]+\.)+[\w\-]{2,4}$').hasMatch(email))
+      return _showError('Please enter a valid email');
+    if (password.length < 6)
+      return _showError('Password must be at least 6 characters');
 
-    if (password.isEmpty) {
-      _showErrorSnackBar('Please enter your password');
-      return;
-    }
-
-    // Email validation
-    if (!RegExp(r'^[\w\-\.]+@([\w\-]+\.)+[\w\-]{2,4}$').hasMatch(email)) {
-      _showErrorSnackBar('Please enter a valid email');
-      return;
-    }
-
-    // Password length check
-    if (password.length < 6) {
-      _showErrorSnackBar('Password must be at least 6 characters');
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     try {
-      print('📧 Email: $email');
-      print('🔒 Remember Me: $_rememberMe');
-      print('👤 User Type: $_selectedUserType');
-
-      // Add timeout to login request
       final loginResult = await Future.any([
         _authService.login(email, password),
-        Future.delayed(const Duration(seconds: 30), () {
-          print('⏱️ Login request timeout (30s)');
-          throw TimeoutException('Login request took too long');
-        }),
+        Future.delayed(const Duration(seconds: 30),
+                () => throw TimeoutException('Login request took too long')),
       ]);
 
       if (loginResult != null) {
-        final user = loginResult['user'] as UserModel;
+        final user  = loginResult['user']  as UserModel;
         final token = loginResult['token'] as String;
 
-        print('✅ Login successful from API');
-        print('   User: ${user.email}');
-        print('   Type: ${user.userType}');
-
-        // Check if user type matches selected type
         if (user.userType != _selectedUserType) {
-          final selectedType = _selectedUserType == 'tenant' ? 'Tenant' : 'Owner';
-          final actualType = user.userType == 'tenant' ? 'Tenant' : 'Owner';
-          
-          _showErrorSnackBar(
-            'Invalid login. You selected $selectedType but this account is registered as $actualType.');
-          
-          setState(() {
-            _isLoading = false;
-          });
-          return;
+          final sel = _selectedUserType == 'tenant' ? 'Tenant' : 'Owner';
+          final act = user.userType       == 'tenant' ? 'Tenant' : 'Owner';
+          setState(() => _isLoading = false);
+          return _showError(
+              'You selected $sel but this account is registered as $act.');
         }
 
-        // ✅ Save session with Remember Me preference
-        print('💾 Saving session...');
-        final sessionSaved = await _sessionService.saveSession(
-          user,
-          token: token,
-          rememberMe: _rememberMe,
-        );
-
-        if (!sessionSaved) {
-          print('⚠️ Warning: Session may not have saved completely');
-          // Show warning but continue
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Warning: Session may not persist across restarts'),
-                backgroundColor: Colors.orange,
-                behavior: SnackBarBehavior.floating,
-                duration: Duration(seconds: 2),
-              ),
-            );
-          }
+        final saved = await _sessionService.saveSession(
+            user, token: token, rememberMe: _rememberMe);
+        if (!saved && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Warning: Session may not persist'),
+            backgroundColor: Colors.orange,
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 2),
+          ));
         }
-
-        // Debug: Verify session was saved
-        await _sessionService.debugPrintSessionData();
 
         if (!mounted) return;
-
-        // Load to provider
         final userProvider = Provider.of<UserProvider>(context, listen: false);
-
         final userData = {
-          '_id': user.id?.toHexString() ?? '',
-          'id': user.id?.toHexString() ?? '',
-          'name': user.personalDetails['fullName'] ??
-              user.personalDetails['name'] ??
-              'User',
-          'email': user.email,
-          'phone': user.personalDetails['phone'] ?? '',
-          'role': user.userType,
-          'userType': user.userType,
-          'authToken': token,
+          '_id'            : user.id?.toHexString() ?? '',
+          'id'             : user.id?.toHexString() ?? '',
+          'name'           : user.personalDetails['fullName'] ??
+              user.personalDetails['name'] ?? 'User',
+          'email'          : user.email,
+          'phone'          : user.personalDetails['phone'] ?? '',
+          'role'           : user.userType,
+          'userType'       : user.userType,
+          'authToken'      : token,
           'personalDetails': user.personalDetails,
         };
-
         userProvider.setUserData(userData);
-        print('✅ User data loaded to provider');
 
         if (!mounted) return;
-
-        // Navigate to appropriate dashboard
-        final route = user.userType == 'owner' ? '/owner-dashboard' : '/home-dashboard';
-        print('📍 Navigating to: $route');
-        
-        Navigator.pushReplacementNamed(context, route);
-
-        // Show welcome message
-        final userName = userData['name'];
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Welcome back, $userName!'),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 2),
-          ),
+        Navigator.pushReplacementNamed(
+          context,
+          user.userType == 'owner' ? '/owner-dashboard' : '/home-dashboard',
         );
-
-        print('✅ Login complete!\n');
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Welcome back, ${userData['name']}!'),
+          backgroundColor: _C.blue,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+        ));
       } else {
-        print('❌ Login failed: No result from API');
-        _showErrorSnackBar('Login failed. Please try again.');
+        _showError('Login failed. Please try again.');
       }
-    } on TimeoutException catch (e) {
-      print('⏱️ Login timeout: $e');
+    } on TimeoutException {
+      if (mounted)
+        _showError('Login timed out. Check your connection and try again.');
+    } catch (e) {
       if (!mounted) return;
-      _showErrorSnackBar('Login timed out. Please check your connection and try again.');
-    } catch (e, stackTrace) {
-      print('❌ Login error: $e');
-      print('Stack trace: $stackTrace');
-      
-      if (!mounted) return;
-      
-      // Clean up error message
-      String errorMessage = e.toString();
-      errorMessage = errorMessage.replaceAll('Exception: ', '');
-      errorMessage = errorMessage.replaceAll('Error: ', '');
-      
-      // Show user-friendly error messages
-      if (errorMessage.toLowerCase().contains('network')) {
-        _showErrorSnackBar('Network error. Please check your internet connection.');
-      } else if (errorMessage.toLowerCase().contains('invalid') || 
-                 errorMessage.toLowerCase().contains('incorrect')) {
-        _showErrorSnackBar('Invalid email or password. Please try again.');
-      } else {
-        _showErrorSnackBar(errorMessage);
-      }
+      String msg = e.toString()
+          .replaceAll('Exception: ', '')
+          .replaceAll('Error: ', '');
+      if (msg.toLowerCase().contains('network'))
+        msg = 'Network error. Please check your internet connection.';
+      else if (msg.toLowerCase().contains('invalid') ||
+          msg.toLowerCase().contains('incorrect'))
+        msg = 'Invalid email or password. Please try again.';
+      _showError(msg);
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  void _showErrorSnackBar(String message) {
+  void _showError(String message) {
     if (!mounted) return;
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 3),
-        action: SnackBarAction(
-          label: 'Dismiss',
-          textColor: Colors.white,
-          onPressed: () {
-            ScaffoldMessenger.of(context).hideCurrentSnackBar();
-          },
-        ),
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(message),
+      backgroundColor: Colors.red.shade700,
+      behavior: SnackBarBehavior.floating,
+      duration: const Duration(seconds: 3),
+      action: SnackBarAction(
+        label: 'Dismiss',
+        textColor: Colors.white,
+        onPressed: () => ScaffoldMessenger.of(context).hideCurrentSnackBar(),
       ),
-    );
+    ));
   }
 
   void _handleForgotPassword() {
     HapticFeedback.lightImpact();
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ForgotPasswordScreen(),
-      ),
-    );
+    Navigator.push(context,
+        MaterialPageRoute(builder: (_) => ForgotPasswordScreen()));
   }
 
   void _handleSignUp() {
     HapticFeedback.lightImpact();
-
     if (_selectedUserType == 'tenant') {
       Navigator.pushNamed(context, '/tenant-registration');
     } else {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => const PropertyOwnerRegistration(),
-        ),
-      );
+      Navigator.push(context,
+          MaterialPageRoute(builder: (_) => const PropertyOwnerRegistration()));
     }
   }
 
+  // ── Build ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    if (_isCheckingSession) {
-      return Scaffold(
-        backgroundColor: AppTheme.lightTheme.scaffoldBackgroundColor,
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(
-                color: AppTheme.lightTheme.colorScheme.primary,
-              ),
-              SizedBox(height: 2.h),
-              Text(
-                'Checking session...',
-                style: AppTheme.lightTheme.textTheme.bodyMedium,
-              ),
-            ],
-          ),
-        ),
-      );
-    }
+    if (_isCheckingSession) return _buildSplash();
+
+    // Make status bar transparent with white icons so navy header shows through
+    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+      statusBarBrightness: Brightness.dark,
+    ));
 
     return Scaffold(
-      backgroundColor: AppTheme.lightTheme.scaffoldBackgroundColor,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: EdgeInsets.symmetric(horizontal: 6.w),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              SizedBox(height: 4.h),
-              LoginHeaderWidget(),
-              SizedBox(height: 6.h),
-              _buildUserTypeToggle(),
-              SizedBox(height: 4.h),
-              _buildFormFields(),
-              SizedBox(height: 1.h),
-              _buildRememberMeToggle(),
-              SizedBox(height: 2.h),
-              _buildLoginButton(),
-              SizedBox(height: 2.h),
-              Row(
+      backgroundColor: _C.offWhite,
+      extendBodyBehindAppBar: true,
+      body: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Full-bleed header covers status bar
+            const LoginHeaderWidget(),
+
+            // Form body — padded safely at the bottom only
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 6.w),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(
-                    child: Divider(
-                      color: AppTheme.lightTheme.colorScheme.outline
-                          .withOpacity(0.3),
-                    ),
-                  ),
-                  Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 4.w),
-                    child: Text(
-                      'OR',
-                      style: AppTheme.lightTheme.textTheme.bodySmall?.copyWith(
-                        color: AppTheme.lightTheme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: Divider(
-                      color: AppTheme.lightTheme.colorScheme.outline
-                          .withOpacity(0.3),
-                    ),
-                  ),
+                  SizedBox(height: 3.5.h),
+                  _buildRoleToggle(),
+                  SizedBox(height: 3.h),
+                  _buildEmailField(),
+                  SizedBox(height: 2.h),
+                  _buildPasswordField(),
+                  _buildForgotRow(),
+                  SizedBox(height: 1.h),
+                  _buildRememberRow(),
+                  SizedBox(height: 2.5.h),
+                  _buildLoginButton(),
+                  SizedBox(height: 2.5.h),
+                  _buildDivider(),
+                  SizedBox(height: 2.5.h),
+                  _buildSignUpRow(),
+                  SizedBox(height: 4.h),
                 ],
               ),
-              SizedBox(height: 2.h),
-              _buildSignUpSection(),
-              SizedBox(height: 4.h),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildUserTypeToggle() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Login as',
-          style: AppTheme.lightTheme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: AppTheme.lightTheme.colorScheme.onSurface,
+  // ── Splash ────────────────────────────────────────────────────────────────
+  Widget _buildSplash() => Scaffold(
+    backgroundColor: _C.navy,
+    body: Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const SizedBox(
+            width: 36,
+            height: 36,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.5,
+              valueColor: AlwaysStoppedAnimation<Color>(_C.skyLight),
+            ),
           ),
-        ),
-        SizedBox(height: 2.h),
-        Row(
-          children: [
-            Expanded(
-              child: _buildUserTypeCard(
-                title: 'Tenant',
-                icon: Icons.home_outlined,
-                userType: 'tenant',
-                isSelected: _selectedUserType == 'tenant',
-              ),
+          SizedBox(height: 2.h),
+          const Text(
+            'RENTIFY',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 4,
             ),
-            SizedBox(width: 3.w),
-            Expanded(
-              child: _buildUserTypeCard(
-                title: 'Owner',
-                icon: Icons.business_outlined,
-                userType: 'owner',
-                isSelected: _selectedUserType == 'owner',
-              ),
+          ),
+          SizedBox(height: 0.8.h),
+          const Text(
+            'Checking session…',
+            style: TextStyle(
+              color: _C.greyText,
+              fontSize: 13,
+              fontWeight: FontWeight.w300,
+              letterSpacing: 0.5,
             ),
-          ],
-        ),
-      ],
-    );
-  }
+          ),
+        ],
+      ),
+    ),
+  );
 
-  Widget _buildUserTypeCard({
-    required String title,
-    required IconData icon,
-    required String userType,
-    required bool isSelected,
-  }) {
+  // ── Role toggle ───────────────────────────────────────────────────────────
+  Widget _buildRoleToggle() => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const Text(
+        'SIGN IN AS',
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 2,
+          color: _C.greyText,
+        ),
+      ),
+      SizedBox(height: 1.5.h),
+      Row(
+        children: [
+          Expanded(
+              child: _roleCard('tenant', 'Tenant', Icons.home_outlined)),
+          SizedBox(width: 3.w),
+          Expanded(
+              child: _roleCard('owner', 'Owner', Icons.domain_outlined)),
+        ],
+      ),
+    ],
+  );
+
+  Widget _roleCard(String type, String label, IconData icon) {
+    final active = _selectedUserType == type;
     return GestureDetector(
-      onTap: () {
-        if (_isLoading) return; // Prevent changing during login
-        setState(() {
-          _selectedUserType = userType;
-        });
+      onTap: _isLoading
+          ? null
+          : () {
+        setState(() => _selectedUserType = type);
         HapticFeedback.selectionClick();
-        print('🔄 User type changed to: $userType');
       },
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+        padding: EdgeInsets.symmetric(vertical: 2.2.h),
         decoration: BoxDecoration(
-          color: isSelected
-              ? AppTheme.lightTheme.colorScheme.primary.withOpacity(0.1)
-              : AppTheme.lightTheme.colorScheme.surface,
+          color: active ? _C.navy : _C.white,
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isSelected
-                ? AppTheme.lightTheme.colorScheme.primary
-                : AppTheme.lightTheme.colorScheme.outline.withOpacity(0.3),
-            width: isSelected ? 2 : 1,
+            color: active ? _C.blueBright : _C.greyLine,
+            width: active ? 2 : 1.5,
           ),
-          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: active
+                  ? _C.blue.withOpacity(0.25)
+                  : Colors.black.withOpacity(0.04),
+              blurRadius: active ? 16 : 8,
+              offset: Offset(0, active ? 6 : 2),
+            ),
+          ],
         ),
         child: Column(
           children: [
-            Icon(
-              icon,
-              size: 32,
-              color: isSelected
-                  ? AppTheme.lightTheme.colorScheme.primary
-                  : AppTheme.lightTheme.colorScheme.onSurfaceVariant,
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: active ? _C.sky.withOpacity(0.15) : _C.greyLine,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, size: 22,
+                  color: active ? _C.skyLight : _C.greyText),
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: 1.h),
             Text(
-              title,
+              label,
               style: TextStyle(
-                fontSize: 14,
+                fontSize: 13,
                 fontWeight: FontWeight.w600,
-                color: isSelected
-                    ? AppTheme.lightTheme.colorScheme.primary
-                    : AppTheme.lightTheme.colorScheme.onSurfaceVariant,
+                letterSpacing: 0.3,
+                color: active ? _C.white : _C.greyText,
               ),
             ),
           ],
@@ -554,259 +425,329 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildFormFields() {
-    return Column(
-      children: [
-        _buildTextField(
-          controller: _emailController,
-          label: 'Email',
-          hint: 'Enter your email',
-          icon: Icons.email_outlined,
-          keyboardType: TextInputType.emailAddress,
-        ),
-        SizedBox(height: 2.h),
-        _buildTextField(
-          controller: _passwordController,
-          label: 'Password',
-          hint: 'Enter your password',
-          icon: Icons.lock_outline,
-          isPassword: true,
-          isPasswordVisible: _isPasswordVisible,
-          onTogglePassword: () {
-            setState(() {
-              _isPasswordVisible = !_isPasswordVisible;
-            });
-          },
-        ),
-        SizedBox(height: 1.h),
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton(
-            onPressed: _isLoading ? null : _handleForgotPassword,
-            child: Text(
-              'Forgot Password?',
-              style: TextStyle(
-                color: _isLoading 
-                    ? AppTheme.lightTheme.colorScheme.primary.withOpacity(0.5)
-                    : AppTheme.lightTheme.colorScheme.primary,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
+  // ── Text fields ───────────────────────────────────────────────────────────
+  Widget _buildEmailField() => _field(
+    controller: _emailController,
+    label: 'EMAIL ADDRESS',
+    hint: 'Enter your email address',
+    icon: Icons.mail_outline_rounded,
+    keyboardType: TextInputType.emailAddress,
+    textInputAction: TextInputAction.next,
+  );
 
-  Widget _buildRememberMeToggle() {
-    return Row(
-      children: [
-        SizedBox(
-          height: 24,
-          width: 24,
-          child: Checkbox(
-            value: _rememberMe,
-            onChanged: _isLoading
-                ? null
-                : (value) {
-                    setState(() {
-                      _rememberMe = value ?? true;
-                    });
-                    HapticFeedback.selectionClick();
-                    print('🔄 Remember Me changed to: $_rememberMe');
-                  },
-            activeColor: AppTheme.lightTheme.colorScheme.primary,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(4),
-            ),
-          ),
-        ),
-        SizedBox(width: 2.w),
-        Expanded(
-          child: GestureDetector(
-            onTap: _isLoading
-                ? null
-                : () {
-                    setState(() {
-                      _rememberMe = !_rememberMe;
-                    });
-                    HapticFeedback.selectionClick();
-                    print('🔄 Remember Me changed to: $_rememberMe');
-                  },
-            child: Text(
-              'Remember me',
-              style: AppTheme.lightTheme.textTheme.bodyMedium?.copyWith(
-                color: _isLoading
-                    ? AppTheme.lightTheme.colorScheme.onSurface.withOpacity(0.5)
-                    : AppTheme.lightTheme.colorScheme.onSurface,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
+  Widget _buildPasswordField() => _field(
+    controller: _passwordController,
+    label: 'PASSWORD',
+    hint: 'Enter your password',
+    icon: Icons.lock_outline_rounded,
+    obscure: !_isPasswordVisible,
+    textInputAction: TextInputAction.done,
+    onSubmitted: (_) => _handleLogin(),
+    suffixIcon: IconButton(
+      icon: Icon(
+        _isPasswordVisible
+            ? Icons.visibility_outlined
+            : Icons.visibility_off_outlined,
+        size: 20,
+        color: _C.greyText,
+      ),
+      onPressed: () =>
+          setState(() => _isPasswordVisible = !_isPasswordVisible),
+    ),
+  );
 
-  Widget _buildTextField({
+  Widget _field({
     required TextEditingController controller,
     required String label,
     required String hint,
     required IconData icon,
-    bool isPassword = false,
-    bool isPasswordVisible = false,
-    VoidCallback? onTogglePassword,
+    bool obscure = false,
+    Widget? suffixIcon,
     TextInputType? keyboardType,
+    TextInputAction? textInputAction,
+    ValueChanged<String>? onSubmitted,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: AppTheme.lightTheme.textTheme.bodyMedium?.copyWith(
+          style: const TextStyle(
+            fontSize: 10,
             fontWeight: FontWeight.w600,
-            color: AppTheme.lightTheme.colorScheme.onSurface,
+            letterSpacing: 1.8,
+            color: _C.greyText,
           ),
         ),
         SizedBox(height: 1.h),
         TextField(
           controller: controller,
-          obscureText: isPassword && !isPasswordVisible,
+          obscureText: obscure,
           keyboardType: keyboardType,
+          textInputAction: textInputAction,
+          onSubmitted: onSubmitted,
           enabled: !_isLoading,
-          textInputAction: isPassword ? TextInputAction.done : TextInputAction.next,
-          onSubmitted: (_) {
-            if (isPassword) {
-              _handleLogin();
-            }
-          },
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w400,
+            color: _C.navy,
+          ),
           decoration: InputDecoration(
             hintText: hint,
-            prefixIcon: Icon(icon),
-            suffixIcon: isPassword
-                ? IconButton(
-                    icon: Icon(
-                      isPasswordVisible
-                          ? Icons.visibility_outlined
-                          : Icons.visibility_off_outlined,
-                    ),
-                    onPressed: onTogglePassword,
-                  )
-                : null,
+            hintStyle: TextStyle(
+              color: _C.greyText.withOpacity(0.7),
+              fontWeight: FontWeight.w300,
+              fontSize: 13,
+            ),
+            prefixIcon: Icon(icon, size: 20, color: _C.greyText),
+            suffixIcon: suffixIcon,
+            filled: true,
+            fillColor: _isLoading ? _C.white.withOpacity(0.6) : _C.white,
+            contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                color: AppTheme.lightTheme.colorScheme.outline
-                    .withOpacity(0.3),
-              ),
+              borderRadius: BorderRadius.circular(14),
+              borderSide:
+              const BorderSide(color: _C.greyLine, width: 1.5),
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                color: AppTheme.lightTheme.colorScheme.outline
-                    .withOpacity(0.3),
-              ),
+              borderRadius: BorderRadius.circular(14),
+              borderSide:
+              const BorderSide(color: _C.greyLine, width: 1.5),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                color: AppTheme.lightTheme.colorScheme.primary,
-                width: 2,
-              ),
+              borderRadius: BorderRadius.circular(14),
+              borderSide:
+              const BorderSide(color: _C.blueBright, width: 2),
             ),
             disabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(14),
               borderSide: BorderSide(
-                color: AppTheme.lightTheme.colorScheme.outline
-                    .withOpacity(0.2),
-              ),
+                  color: _C.greyLine.withOpacity(0.5), width: 1.5),
             ),
-            filled: true,
-            fillColor: _isLoading 
-                ? AppTheme.lightTheme.colorScheme.surface.withOpacity(0.5)
-                : AppTheme.lightTheme.colorScheme.surface,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildLoginButton() {
-    return SizedBox(
-      width: double.infinity,
-      height: 56,
+  // ── Forgot password ───────────────────────────────────────────────────────
+  Widget _buildForgotRow() => Align(
+    alignment: Alignment.centerRight,
+    child: TextButton(
+      onPressed: _isLoading ? null : _handleForgotPassword,
+      style: TextButton.styleFrom(
+        padding:
+        const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+        minimumSize: Size.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      child: Text(
+        'Forgot Password?',
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color:
+          _isLoading ? _C.blue.withOpacity(0.4) : _C.blueBright,
+          letterSpacing: 0.2,
+        ),
+      ),
+    ),
+  );
+
+  // ── Remember me ───────────────────────────────────────────────────────────
+  Widget _buildRememberRow() => GestureDetector(
+    onTap: _isLoading
+        ? null
+        : () {
+      setState(() => _rememberMe = !_rememberMe);
+      HapticFeedback.selectionClick();
+    },
+    child: Row(
+      children: [
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          width: 22,
+          height: 22,
+          decoration: BoxDecoration(
+            color: _rememberMe ? _C.navy : _C.white,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: _rememberMe ? _C.blueBright : _C.greyLine,
+              width: 1.5,
+            ),
+            boxShadow: _rememberMe
+                ? [
+              BoxShadow(
+                color: _C.blue.withOpacity(0.3),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              )
+            ]
+                : [],
+          ),
+          child: _rememberMe
+              ? const Icon(Icons.check_rounded,
+              size: 14, color: Colors.white)
+              : null,
+        ),
+        SizedBox(width: 3.w),
+        Text(
+          'Keep me signed in',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w400,
+            color: _isLoading
+                ? _C.navy.withOpacity(0.4)
+                : _C.navy.withOpacity(0.65),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  // ── Login button ──────────────────────────────────────────────────────────
+  Widget _buildLoginButton() => SizedBox(
+    width: double.infinity,
+    height: 56,
+    child: DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: _isLoading
+            ? null
+            : const LinearGradient(
+          colors: [_C.blue, _C.blueBright, Color(0xFF2D6DC4)],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+        color: _isLoading ? _C.blue.withOpacity(0.5) : null,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: _isLoading
+            ? []
+            : [
+          BoxShadow(
+            color: _C.blue.withOpacity(0.45),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+          BoxShadow(
+            color: _C.blue.withOpacity(0.2),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
       child: ElevatedButton(
         onPressed: _isLoading ? null : _handleLogin,
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppTheme.lightTheme.colorScheme.primary,
+          backgroundColor: Colors.transparent,
+          shadowColor: Colors.transparent,
           foregroundColor: Colors.white,
-          elevation: 2,
+          elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(16),
           ),
-          disabledBackgroundColor: AppTheme.lightTheme.colorScheme.primary
-              .withOpacity(0.6),
+          disabledBackgroundColor: Colors.transparent,
         ),
         child: _isLoading
             ? const SizedBox(
-                height: 24,
-                width: 24,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              )
-            : const Text(
-                'Login',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-      ),
-    );
-  }
-
-  Widget _buildSignUpSection() {
-    return Column(
-      children: [
-        Row(
+          width: 22,
+          height: 22,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            valueColor:
+            AlwaysStoppedAnimation<Color>(Colors.white),
+          ),
+        )
+            : const Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
-              "Don't have an account? ",
-              style: AppTheme.lightTheme.textTheme.bodyMedium,
-            ),
-            GestureDetector(
-              onTap: _isLoading ? null : _handleSignUp,
-              child: Text(
-                'Sign Up',
-                style: TextStyle(
-                  color: _isLoading
-                      ? AppTheme.lightTheme.colorScheme.primary.withOpacity(0.5)
-                      : AppTheme.lightTheme.colorScheme.primary,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
-                ),
+              'SIGN IN',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 2,
+                color: Colors.white,
               ),
             ),
+            SizedBox(width: 10),
+            Icon(Icons.arrow_forward_rounded,
+                size: 18, color: Colors.white),
           ],
         ),
-        SizedBox(height: 1.h),
-        Text(
-          'as ${_selectedUserType == 'tenant' ? 'Tenant' : 'Property Owner'}',
-          style: AppTheme.lightTheme.textTheme.bodySmall?.copyWith(
-            color: AppTheme.lightTheme.colorScheme.onSurfaceVariant,
+      ),
+    ),
+  );
+
+  // ── Divider ───────────────────────────────────────────────────────────────
+  Widget _buildDivider() => Row(
+    children: [
+      const Expanded(child: Divider(color: _C.greyLine, thickness: 1)),
+      Padding(
+        padding: EdgeInsets.symmetric(horizontal: 4.w),
+        child: const Text(
+          'OR',
+          style: TextStyle(
+            fontSize: 10,
+            letterSpacing: 2,
+            fontWeight: FontWeight.w600,
+            color: _C.greyText,
           ),
         ),
-      ],
-    );
-  }
+      ),
+      const Expanded(child: Divider(color: _C.greyLine, thickness: 1)),
+    ],
+  );
+
+  // ── Sign up ───────────────────────────────────────────────────────────────
+  Widget _buildSignUpRow() => Column(
+    children: [
+      Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Text(
+            "Don't have an account?",
+            style: TextStyle(
+              fontSize: 13,
+              color: _C.greyText,
+              fontWeight: FontWeight.w400,
+            ),
+          ),
+          const SizedBox(width: 4),
+          GestureDetector(
+            onTap: _isLoading ? null : _handleSignUp,
+            child: Text(
+              'Create Account',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: _isLoading
+                    ? _C.blueBright.withOpacity(0.4)
+                    : _C.blueBright,
+                letterSpacing: 0.2,
+              ),
+            ),
+          ),
+        ],
+      ),
+      SizedBox(height: 0.8.h),
+      Text(
+        'as ${_selectedUserType == 'tenant' ? 'Tenant' : 'Property Owner'}',
+        style: const TextStyle(
+          fontSize: 11,
+          color: _C.greyText,
+          fontWeight: FontWeight.w300,
+          letterSpacing: 0.3,
+        ),
+      ),
+    ],
+  );
 }
 
+// ── Timeout exception ─────────────────────────────────────────────────────
 class TimeoutException implements Exception {
   final String message;
   TimeoutException(this.message);
-  
   @override
   String toString() => message;
 }
