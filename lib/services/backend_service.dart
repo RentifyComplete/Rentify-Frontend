@@ -252,6 +252,25 @@ class BackendService {
       return null;
     }
   }
+  Future<String?> getTenantAgreementUrl(String propertyId) async {
+    if (propertyId.isEmpty) return null;
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/properties/$propertyId'),
+        headers: {'Content-Type': 'application/json'},
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final property = data['data'] ?? data['property'] ?? data;
+        return property['tenantAgreementUrl']?.toString(); // ⭐ separate field
+      }
+      return null;
+    } catch (e) {
+      print('❌ Error fetching tenant agreement URL: $e');
+      return null;
+    }
+  }
   Future<List<Map<String, dynamic>>> getAllProperties() async {
     try {
       print('🔄 Fetching all properties from: $baseUrl/api/properties');

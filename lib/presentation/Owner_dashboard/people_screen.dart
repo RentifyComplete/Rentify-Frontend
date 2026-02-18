@@ -792,7 +792,7 @@ class _PeopleScreenState extends State<PeopleScreen> with SingleTickerProviderSt
         'documents': booking['tenantDocuments'] ?? booking['documents'] ?? {},
         'roomNumber': booking['roomNumber'],
         'occupancyType': booking['occupancyType'],
-        'agreementUrl': property.isNotEmpty ? property['agreementUrl'] : null, // ⭐ ADD THIS LINE
+        'agreementUrl': property.isNotEmpty ? property['agreementUrl'] : null,
       };
 
       tenants.add(tenant);
