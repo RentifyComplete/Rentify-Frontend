@@ -8,6 +8,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:provider/provider.dart';
 import '../../core/app_export.dart';
 import '../../providers/user_provider.dart';
@@ -95,6 +96,8 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen>
                   'lateFee': _parseToInt(payment['lateFee'], 0),
                   'bookingId': payment['bookingId'],
                   'propertyId': payment['propertyId'],
+                  'reason': payment['reason'],           // ⭐ NEW
+                  'addedByOwner': payment['addedByOwner'] ?? false, // ⭐ NEW
                 };
               })
           );
@@ -683,6 +686,54 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen>
                   ],
                 ),
               ],
+
+              // ⭐ NEW: Show reason if added by owner
+              if (payment['reason'] != null && payment['reason'].toString().isNotEmpty) ...[
+                SizedBox(height: 1.h),
+                Row(
+                  children: [
+                    Icon(Icons.info_outline, size: 3.5.w, color: Colors.orange.shade700),
+                    SizedBox(width: 2.w),
+                    Expanded(
+                      child: Text(
+                        'Reason: ${payment['reason']}',
+                        style: GoogleFonts.poppins(
+                          fontSize: 9.sp,
+                          color: Colors.orange.shade700,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+
+              // ⭐ NEW: Pay Now button for pending dues
+              if (!isPaid) ...[
+                SizedBox(height: 2.h),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () => _payDue(payment),
+                    icon: Icon(Icons.payment, size: 4.w),
+                    label: Text(
+                      'Pay Now  ₹${NumberFormat('#,##,###').format(payment['amount'])}',
+                      style: GoogleFonts.poppins(
+                        fontSize: 11.sp,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange.shade600,
+                      foregroundColor: Colors.white,
+                      padding: EdgeInsets.symmetric(vertical: 1.5.h),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -877,7 +928,239 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen>
       ),
     );
   }
+  Future<void> _payDue(Map<String, dynamic> due) async {
+    final bookingId = due['bookingId']?.toString();
 
+    if (bookingId == null || bookingId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Booking info missing. Cannot process payment.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.payment, color: Colors.orange.shade600),
+            SizedBox(width: 2.w),
+            Text('Pay Due', style: TextStyle(fontSize: 14.sp)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Amount: ₹${NumberFormat('#,##,###').format(due['amount'])}',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.sp),
+            ),
+            if (due['reason'] != null) ...[
+              SizedBox(height: 1.h),
+              Text(
+                'Reason: ${due['reason']}',
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 10.sp),
+              ),
+            ],
+            SizedBox(height: 2.h),
+            Container(
+              padding: EdgeInsets.all(3.w),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.blue.shade200),
+              ),
+              child: Text(
+                'Payment will be processed via Razorpay.',
+                style: TextStyle(color: Colors.blue.shade700, fontSize: 9.sp),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange.shade600,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: Text('Pay Now'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    // ⭐ Show loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Center(
+        child: Card(
+          child: Padding(
+            padding: EdgeInsets.all(4.w),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(color: AppTheme.primaryLight),
+                SizedBox(height: 2.h),
+                Text('Creating payment order...'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    try {
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+
+      // ⭐ Create order for due amount via existing rent order endpoint
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/payments/create-tenant-rent-order'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'bookingId': bookingId,
+          'propertyId': due['propertyId'] ?? '',
+          'monthsDuration': 1,
+          'isDuePayment': true,        // ⭐ flag so backend knows
+          'dueAmount': due['amount'],  // ⭐ override amount
+          'dueId': due['id'],          // ⭐ to mark due as paid after
+        }),
+      ).timeout(const Duration(seconds: 30));
+
+      if (Navigator.canPop(context)) Navigator.pop(context); // close loading
+
+      if (response.statusCode != 200) {
+        throw Exception('Failed to create payment order');
+      }
+
+      final orderData = jsonDecode(response.body);
+      if (orderData['success'] != true) {
+        throw Exception(orderData['message'] ?? 'Order creation failed');
+      }
+
+      // ⭐ Open Razorpay
+      final razorpay = Razorpay();
+      razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, (PaymentSuccessResponse payResponse) async {
+        razorpay.clear();
+
+        // Verify payment and mark due as paid
+        try {
+          final verifyResponse = await http.post(
+            Uri.parse('$baseUrl/api/payments/verify-due-payment'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'razorpay_order_id': payResponse.orderId,
+              'razorpay_payment_id': payResponse.paymentId,
+              'razorpay_signature': payResponse.signature,
+              'bookingId': bookingId,
+              'dueId': due['id'],
+              'amount': due['amount'],
+            }),
+          );
+
+          if (mounted) {
+            showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (context) => AlertDialog(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: EdgeInsets.all(3.w),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(Icons.check_circle, color: Colors.green, size: 20.w),
+                    ),
+                    SizedBox(height: 2.h),
+                    Text('Payment Successful!',
+                        style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.bold)),
+                    SizedBox(height: 1.h),
+                    Text(
+                      '₹${NumberFormat('#,##,###').format(due['amount'])}',
+                      style: TextStyle(fontSize: 22.sp, fontWeight: FontWeight.bold, color: Colors.green),
+                    ),
+                    SizedBox(height: 2.h),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _loadPaymentHistory(); // ⭐ refresh list
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.primaryLight,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          padding: EdgeInsets.symmetric(vertical: 1.5.h),
+                        ),
+                        child: Text('Done'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+        } catch (e) {
+          print('❌ Error verifying due payment: $e');
+        }
+      });
+
+      razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, (PaymentFailureResponse failResponse) {
+        razorpay.clear();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Payment failed: ${failResponse.message}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      });
+
+      razorpay.open({
+        'key': orderData['key'],
+        'amount': (due['amount'] * 100).toInt(), // paise
+        'order_id': orderData['orderId'],
+        'name': 'Rentify',
+        'description': due['reason'] ?? 'Due Payment',
+        'prefill': {
+          'email': userProvider.userEmail ?? '',
+          'contact': '',
+          'name': userProvider.userName ?? '',
+        },
+        'theme': {'color': '#FF9800'},
+      });
+
+    } catch (e) {
+      if (Navigator.canPop(context)) Navigator.pop(context);
+      print('❌ Error processing due payment: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
   void _downloadReport() {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

@@ -844,13 +844,13 @@ Future<void> _handleLogout(BuildContext context) async {
       backgroundColor: AppTheme.lightTheme.scaffoldBackgroundColor,
       title: Row(
         children: [
-          CustomImageWidget(
-            imageUrl: userProfilePic,
-            width: 10.w,
-            height: 10.w,
-            fit: BoxFit.cover,
-          ),
-          SizedBox(width: 3.w),
+          // CustomImageWidget(
+          //   imageUrl: userProfilePic,
+          //   width: 10.w,
+          //   height: 10.w,
+          //   fit: BoxFit.cover,
+          // ),
+          // SizedBox(width: 3.w),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1078,10 +1078,10 @@ Future<void> _handleLogout(BuildContext context) async {
               padding: EdgeInsets.all(4.w),
               child: Row(
                 children: [
-                  CircleAvatar(
-                    radius: 8.w,
-                    backgroundImage: NetworkImage(userProvider.userProfilePicture),
-                  ),
+                  // CircleAvatar(
+                  //   radius: 8.w,
+                  //   backgroundImage: NetworkImage(userProvider.userProfilePicture),
+                  // ),
                   SizedBox(width: 4.w),
                   Expanded(
                     child: Column(

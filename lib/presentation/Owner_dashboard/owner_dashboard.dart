@@ -1025,13 +1025,13 @@ Future<void> _handleLogout(BuildContext context) async {
       backgroundColor: AppTheme.lightTheme.scaffoldBackgroundColor,
       title: Row(
         children: [
-          CustomImageWidget(
-            imageUrl: userProvider.userProfilePicture,
-            width: 10.w,
-            height: 10.w,
-            fit: BoxFit.cover,
-          ),
-          SizedBox(width: 3.w),
+          // CustomImageWidget(
+          //   imageUrl: userProvider.userProfilePicture,
+          //   width: 10.w,
+          //   height: 10.w,
+          //   fit: BoxFit.cover,
+          // ),
+          // SizedBox(width: 3.w),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

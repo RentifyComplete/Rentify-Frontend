@@ -1598,6 +1598,7 @@ class _PeopleScreenState extends State<PeopleScreen> with SingleTickerProviderSt
       agreementUrl: tenant['agreementUrl'],  // ⭐ ADD THIS LINE
       onEditRent: () => _editTenantRent(tenant),
       onDelete: () => _deleteTenant(tenant),
+      onDuesUpdated: _loadData, // ⭐ ADD THIS LINE
       onCall: () {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Call: ${tenant['phone']}')),
