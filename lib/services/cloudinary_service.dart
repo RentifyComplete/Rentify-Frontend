@@ -147,8 +147,6 @@ class CloudinaryService {
         ..fields['upload_preset'] = uploadPreset
         ..fields['folder'] = finalFolder
         ..fields['public_id'] = publicId
-        ..fields['access_mode'] = 'public'      // ⭐ ADD THIS
-        ..fields['type'] = 'upload'             // ⭐ ADD THIS
         ..files.add(await http.MultipartFile.fromPath('file', documentFile.path));
 
       // Add tags
