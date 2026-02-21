@@ -3,7 +3,10 @@ import 'package:sizer/sizer.dart';
 import '../../core/app_export.dart';
 import '../../services/analytics_service.dart';
 import '../../services/auth_service.dart';
-import 'package:mongo_dart/mongo_dart.dart' show where;
+import 'package:mongo_dart/mongo_dart.dart' show where, ObjectId;
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class AnalyticsScreen extends StatefulWidget {
   const AnalyticsScreen({super.key});
@@ -15,10 +18,15 @@ class AnalyticsScreen extends StatefulWidget {
 class _AnalyticsScreenState extends State<AnalyticsScreen> {
   final AnalyticsService _analyticsService = AnalyticsService();
   final AuthService _authService = AuthService();
-  
+
   String selectedPeriod = "This Month";
-  final List<String> periods = ["This Week", "This Month", "This Year", "All Time"];
-  
+  final List<String> periods = [
+    "This Week",
+    "This Month",
+    "This Year",
+    "All Time"
+  ];
+
   bool _isLoading = true;
   Map<String, dynamic> analyticsData = {};
   List<Map<String, dynamic>> monthlyRevenue = [];
@@ -52,7 +60,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     try {
       // Get current user ID
       final userId = await _authService.getCurrentUserId();
-      
+
       if (userId == null) {
         setState(() {
           _errorMessage = 'User not logged in';
@@ -93,9 +101,13 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
 
         // ⭐ DEBUG: Print all analytics data
         print('📊 ========== ANALYTICS DATA DEBUG ==========');
-        print('Total Revenue: ${data['totalRevenue']} (${data['totalRevenue'].runtimeType})');
-        print('Monthly Collection: ${data['monthlyCollection']} (${data['monthlyCollection'].runtimeType})');
-        print('Monthly Dues: ${data['monthlyDues']} (${data['monthlyDues'].runtimeType})');
+        print('Total Revenue: ${data['totalRevenue']} (${data['totalRevenue']
+            .runtimeType})');
+        print(
+            'Monthly Collection: ${data['monthlyCollection']} (${data['monthlyCollection']
+                .runtimeType})');
+        print('Monthly Dues: ${data['monthlyDues']} (${data['monthlyDues']
+            .runtimeType})');
         print('Total Properties: ${data['totalProperties']}');
         print('Total Tenants: ${data['totalTenants']}');
         print('==========================================');
@@ -149,51 +161,52 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               });
               _loadAnalytics();
             },
-            itemBuilder: (context) => periods.map((period) {
-              return PopupMenuItem<String>(
-                value: period,
-                child: Text(period),
-              );
-            }).toList(),
+            itemBuilder: (context) =>
+                periods.map((period) {
+                  return PopupMenuItem<String>(
+                    value: period,
+                    child: Text(period),
+                  );
+                }).toList(),
           ),
         ],
       ),
       body: _isLoading
           ? Center(child: CircularProgressIndicator())
           : _errorMessage != null
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.error_outline, size: 60, color: Colors.red),
-                      SizedBox(height: 2.h),
-                      Text(_errorMessage!, textAlign: TextAlign.center),
-                      SizedBox(height: 2.h),
-                      ElevatedButton(
-                        onPressed: _loadAnalytics,
-                        child: Text('Retry'),
-                      ),
-                    ],
-                  ),
-                )
-              : RefreshIndicator(
-                  onRefresh: _loadAnalytics,
-                  child: SingleChildScrollView(
-                    physics: AlwaysScrollableScrollPhysics(),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildPeriodSelector(),
-                        _buildRevenueOverview(),
-                        SizedBox(height: 2.h),
-                        _buildKeyMetrics(),
-                        SizedBox(height: 3.h),
-                        _buildTenantInsights(),
-                        SizedBox(height: 5.h),
-                      ],
-                    ),
-                  ),
-                ),
+          ? Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, size: 60, color: Colors.red),
+            SizedBox(height: 2.h),
+            Text(_errorMessage!, textAlign: TextAlign.center),
+            SizedBox(height: 2.h),
+            ElevatedButton(
+              onPressed: _loadAnalytics,
+              child: Text('Retry'),
+            ),
+          ],
+        ),
+      )
+          : RefreshIndicator(
+        onRefresh: _loadAnalytics,
+        child: SingleChildScrollView(
+          physics: AlwaysScrollableScrollPhysics(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildPeriodSelector(),
+              _buildRevenueOverview(),
+              SizedBox(height: 2.h),
+              _buildKeyMetrics(),
+              SizedBox(height: 3.h),
+              _buildTenantInsights(),
+              SizedBox(height: 5.h),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -244,7 +257,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       padding: EdgeInsets.all(5.w),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [AppTheme.primaryLight, AppTheme.primaryLight.withOpacity(0.7)],
+          colors: [
+            AppTheme.primaryLight,
+            AppTheme.primaryLight.withOpacity(0.7)
+          ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -273,7 +289,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               Container(
                 padding: EdgeInsets.symmetric(horizontal: 3.w, vertical: 0.5.h),
                 decoration: BoxDecoration(
-                  color: _getGrowthColor(analyticsData['revenueGrowth'] ?? '+0%'),
+                  color: _getGrowthColor(
+                      analyticsData['revenueGrowth'] ?? '+0%'),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
@@ -374,7 +391,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           ),
           _buildMetricCard(
             "Monthly Collection",
-            '₹${_formatNumber(_extractAmount(analyticsData['monthlyCollection']))}',
+            '₹${_formatNumber(
+                _extractAmount(analyticsData['monthlyCollection']))}',
             Icons.trending_up,
             AppTheme.successLight,
           ),
@@ -389,7 +407,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
   }
 
-  Widget _buildMetricCard(String label, String value, IconData icon, Color color) {
+  Widget _buildMetricCard(String label, String value, IconData icon,
+      Color color) {
     return Container(
       padding: EdgeInsets.all(3.w),
       decoration: BoxDecoration(
@@ -444,7 +463,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     double maxRevenue = monthlyRevenue
         .map((data) => (data['revenue'] as num).toDouble())
         .reduce((a, b) => a > b ? a : b);
-    
+
     if (maxRevenue == 0) maxRevenue = 1000; // Prevent division by zero
 
     return Padding(
@@ -567,9 +586,15 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    _buildOccupancyItem("Total", total.toString(), Icons.home_work, Colors.blue),
-                    _buildOccupancyItem("Occupied", occupied.toString(), Icons.check_circle, AppTheme.successLight),
-                    _buildOccupancyItem("Vacant", vacant.toString(), Icons.cancel, Colors.orange),
+                    _buildOccupancyItem(
+                        "Total", total.toString(), Icons.home_work,
+                        Colors.blue),
+                    _buildOccupancyItem(
+                        "Occupied", occupied.toString(), Icons.check_circle,
+                        AppTheme.successLight),
+                    _buildOccupancyItem(
+                        "Vacant", vacant.toString(), Icons.cancel,
+                        Colors.orange),
                   ],
                 ),
                 SizedBox(height: 3.h),
@@ -578,7 +603,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   child: LinearProgressIndicator(
                     value: total > 0 ? occupancyRate / 100 : 0,
                     backgroundColor: Colors.grey.shade200,
-                    valueColor: AlwaysStoppedAnimation<Color>(AppTheme.successLight),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                        AppTheme.successLight),
                     minHeight: 2.h,
                   ),
                 ),
@@ -598,7 +624,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
   }
 
-  Widget _buildOccupancyItem(String label, String value, IconData icon, Color color) {
+  Widget _buildOccupancyItem(String label, String value, IconData icon,
+      Color color) {
     return Column(
       children: [
         Icon(icon, color: color, size: 10.w),
@@ -649,7 +676,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             ],
           ),
           SizedBox(height: 2.h),
-          ...propertyPerformance.take(4).map((property) => _buildPropertyCard(property)).toList(),
+          ...propertyPerformance.take(4).map((property) =>
+              _buildPropertyCard(property)).toList(),
         ],
       ),
     );
@@ -726,8 +754,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   Text(
                     '${property['occupancy'] ?? 0}%',
                     style: AppTheme.lightTheme.textTheme.titleMedium?.copyWith(
-                      color: (property['occupancy'] ?? 0) == 100 
-                          ? AppTheme.successLight 
+                      color: (property['occupancy'] ?? 0) == 100
+                          ? AppTheme.successLight
                           : Colors.orange,
                       fontWeight: FontWeight.bold,
                     ),
@@ -807,7 +835,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               ),
             ],
           ),
-          
+
           // Show tenant preview if there are tenants
           if ((analyticsData['totalTenants'] ?? 0) > 0) ...[
             SizedBox(height: 3.h),
@@ -860,7 +888,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
 
             final tenants = snapshot.data!.take(3).toList();
             return Column(
-              children: tenants.map((tenant) => _buildTenantPreviewCard(tenant)).toList(),
+              children: tenants
+                  .map((tenant) => _buildTenantPreviewCard(tenant))
+                  .toList(),
             );
           },
         ),
@@ -982,35 +1012,74 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
 
       if (ownerProperties.isEmpty) return [];
 
-      final propertyIds = ownerProperties.map((p) => p['_id'].toString()).toList();
-      print('📊 Property IDs: $propertyIds');
+      // Keep raw ObjectIds for querying, strings only for logging
+      final propertyObjectIds = ownerProperties.map((p) => p['_id']).toList();
+      final propertyIdStrings = propertyObjectIds
+          .map((id) => id.toHexString())
+          .toList();
+      print('📊 Property IDs: $propertyIdStrings');
 
-      // Try to get bookings by ownerId first (if booking has ownerId field)
+// Try to get bookings by ownerId first
       List<Map<String, dynamic>> tenantBookings = await bookings
           .find(where.eq('ownerId', userId))
           .toList();
 
-      print('📊 Found ${tenantBookings.length} bookings by ownerId');
+      print('📊 Found ${tenantBookings.length} bookings by ownerId (string)');
 
-      // If no bookings found by ownerId, try by propertyId
+// Fallback: try with ObjectId
+      if (tenantBookings.isEmpty) {
+        try {
+          final userObjectId = ObjectId.fromHexString(userId);
+          tenantBookings = await bookings
+              .find(where.eq('ownerId', userObjectId))
+              .toList();
+          print('📊 Found ${tenantBookings
+              .length} bookings by ownerId (ObjectId)');
+        } catch (_) {}
+      }
+
+// Fallback: query by raw ObjectId propertyIds
       if (tenantBookings.isEmpty) {
         tenantBookings = await bookings
-            .find(where.oneFrom('propertyId', propertyIds))
+            .find(where.oneFrom('propertyId', propertyObjectIds))
             .toList();
-        print('📊 Found ${tenantBookings.length} bookings by propertyId');
+        print('📊 Found ${tenantBookings
+            .length} bookings by propertyId (ObjectId)');
+      }
+
+// Fallback: fetch all bookings and match by hex string
+      if (tenantBookings.isEmpty) {
+        final allBookings = await bookings.find().toList();
+        tenantBookings = allBookings.where((b) {
+          final bPropId = b['propertyId']?.toHexString?.call() ??
+              b['propertyId']?.toString() ?? '';
+          return propertyIdStrings.any((pid) =>
+          bPropId.contains(pid) || pid.contains(bPropId));
+        }).toList();
+        print('📊 Found ${tenantBookings.length} bookings by hex string match');
+        for (var b in tenantBookings) {
+          print(
+              '   ⚡ Status: "${b['status']}" | propertyId type: ${b['propertyId']
+                  .runtimeType}');
+        }
       }
 
       // Filter active/confirmed bookings and enrich with property info
       final enrichedTenants = <Map<String, dynamic>>[];
-      
+
       for (var booking in tenantBookings) {
-        print('   Processing booking: ${booking['_id']} - Status: ${booking['status']}');
-        
-        if (booking['status'] == 'confirmed' || booking['status'] == 'active') {
+        print(
+            '   Processing booking: ${booking['_id']} - Status: ${booking['status']}');
+
+        final status = booking['status']?.toString().toLowerCase().trim() ?? '';
+        if (status == 'confirmed' || status == 'active' ||
+            status == 'approved' || status.isEmpty) {
           // Find matching property
           final property = ownerProperties.firstWhere(
-            (p) => p['_id'].toString() == booking['propertyId'].toString(),
-            orElse: () => ownerProperties.isNotEmpty ? ownerProperties.first : {},
+                (p) => p['_id'].toString() == booking['propertyId'].toString(),
+            orElse: () =>
+            ownerProperties.isNotEmpty ? ownerProperties.first : {
+            },
           );
 
           enrichedTenants.add({
@@ -1018,7 +1087,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             'propertyTitle': property['title'] ?? 'Property',
             'rent': booking['monthlyRent'] ?? booking['totalAmount'] ?? 0,
           });
-          
+
           print('   ✓ Added tenant: ${booking['tenantName']}');
         }
       }
@@ -1027,8 +1096,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
 
       // Sort by most recent
       enrichedTenants.sort((a, b) {
-        final aDate = DateTime.tryParse(a['bookingDate']?.toString() ?? '') ?? DateTime.now();
-        final bDate = DateTime.tryParse(b['bookingDate']?.toString() ?? '') ?? DateTime.now();
+        final aDate = DateTime.tryParse(a['bookingDate']?.toString() ?? '') ??
+            DateTime.now();
+        final bDate = DateTime.tryParse(b['bookingDate']?.toString() ?? '') ??
+            DateTime.now();
         return bDate.compareTo(aDate);
       });
 
@@ -1046,71 +1117,76 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.9,
-        minChildSize: 0.5,
-        maxChildSize: 0.95,
-        expand: false,
-        builder: (context, scrollController) => Container(
-          padding: EdgeInsets.all(4.w),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 12.w,
-                  height: 0.5.h,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(2),
+      builder: (context) =>
+          DraggableScrollableSheet(
+            initialChildSize: 0.9,
+            minChildSize: 0.5,
+            maxChildSize: 0.95,
+            expand: false,
+            builder: (context, scrollController) =>
+                Container(
+                  padding: EdgeInsets.all(4.w),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 12.w,
+                          height: 0.5.h,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade300,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 2.h),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'All Tenants',
+                            style: AppTheme.lightTheme.textTheme.titleLarge
+                                ?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.close),
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 2.h),
+                      Expanded(
+                        child: FutureBuilder<List<Map<String, dynamic>>>(
+                          future: _fetchRecentTenants(),
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState ==
+                                ConnectionState.waiting) {
+                              return Center(child: CircularProgressIndicator());
+                            }
+
+                            if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                              return Center(
+                                child: Text('No tenants found'),
+                              );
+                            }
+
+                            return ListView.builder(
+                              controller: scrollController,
+                              itemCount: snapshot.data!.length,
+                              itemBuilder: (context, index) {
+                                return _buildTenantDetailCard(
+                                    snapshot.data![index]);
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-              SizedBox(height: 2.h),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'All Tenants',
-                    style: AppTheme.lightTheme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  IconButton(
-                    icon: Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-              SizedBox(height: 2.h),
-              Expanded(
-                child: FutureBuilder<List<Map<String, dynamic>>>(
-                  future: _fetchRecentTenants(),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return Center(child: CircularProgressIndicator());
-                    }
-
-                    if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                      return Center(
-                        child: Text('No tenants found'),
-                      );
-                    }
-
-                    return ListView.builder(
-                      controller: scrollController,
-                      itemCount: snapshot.data!.length,
-                      itemBuilder: (context, index) {
-                        return _buildTenantDetailCard(snapshot.data![index]);
-                      },
-                    );
-                  },
-                ),
-              ),
-            ],
           ),
-        ),
-      ),
     );
   }
 
@@ -1150,7 +1226,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   color: AppTheme.primaryLight.withOpacity(0.1),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(Icons.person, color: AppTheme.primaryLight, size: 6.w),
+                child: Icon(
+                    Icons.person, color: AppTheme.primaryLight, size: 6.w),
               ),
               SizedBox(width: 3.w),
               Expanded(
@@ -1159,7 +1236,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   children: [
                     Text(
                       name,
-                      style: AppTheme.lightTheme.textTheme.titleMedium?.copyWith(
+                      style: AppTheme.lightTheme.textTheme.titleMedium
+                          ?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -1176,8 +1254,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               Container(
                 padding: EdgeInsets.symmetric(horizontal: 2.w, vertical: 0.5.h),
                 decoration: BoxDecoration(
-                  color: status == 'active' 
-                      ? Colors.green.shade50 
+                  color: status == 'active'
+                      ? Colors.green.shade50
                       : Colors.orange.shade50,
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -1193,7 +1271,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             ],
           ),
           SizedBox(height: 2.h),
-          
+
           Container(
             padding: EdgeInsets.all(2.w),
             decoration: BoxDecoration(
@@ -1217,7 +1295,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               ],
             ),
           ),
-          
+
           if (email.isNotEmpty || phone.isNotEmpty) ...[
             SizedBox(height: 1.h),
             if (email.isNotEmpty)
@@ -1227,7 +1305,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   SizedBox(width: 2.w),
                   Text(
                     email,
-                    style: TextStyle(fontSize: 9.sp, color: Colors.grey.shade600),
+                    style: TextStyle(
+                        fontSize: 9.sp, color: Colors.grey.shade600),
                   ),
                 ],
               ),
@@ -1239,7 +1318,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   SizedBox(width: 2.w),
                   Text(
                     phone,
-                    style: TextStyle(fontSize: 9.sp, color: Colors.grey.shade600),
+                    style: TextStyle(
+                        fontSize: 9.sp, color: Colors.grey.shade600),
                   ),
                 ],
               ),
@@ -1276,7 +1356,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
   }
 
-  Widget _buildInsightCard(String label, String value, IconData icon, Color color) {
+  Widget _buildInsightCard(String label, String value, IconData icon,
+      Color color) {
     return Container(
       padding: EdgeInsets.all(3.w),
       decoration: BoxDecoration(
@@ -1344,27 +1425,27 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             child: Column(
               children: [
                 _buildFinancialRow(
-                  "Total Revenue", 
-                  analyticsData['totalRevenue'] ?? '₹0', 
-                  AppTheme.successLight
+                    "Total Revenue",
+                    analyticsData['totalRevenue'] ?? '₹0',
+                    AppTheme.successLight
                 ),
                 Divider(height: 3.h),
                 _buildFinancialRow(
-                  "Average Rent", 
-                  analyticsData['averageRent'] ?? '₹0', 
-                  Colors.blue
+                    "Average Rent",
+                    analyticsData['averageRent'] ?? '₹0',
+                    Colors.blue
                 ),
                 Divider(height: 3.h),
                 _buildFinancialRow(
-                  "Properties", 
-                  "${analyticsData['totalProperties'] ?? 0} units", 
-                  AppTheme.primaryLight
+                    "Properties",
+                    "${analyticsData['totalProperties'] ?? 0} units",
+                    AppTheme.primaryLight
                 ),
                 Divider(height: 3.h),
                 _buildFinancialRow(
-                  "Growth", 
-                  analyticsData['revenueGrowth'] ?? '+0%', 
-                  _getGrowthColor(analyticsData['revenueGrowth'] ?? '+0%')
+                    "Growth",
+                    analyticsData['revenueGrowth'] ?? '+0%',
+                    _getGrowthColor(analyticsData['revenueGrowth'] ?? '+0%')
                 ),
               ],
             ),
@@ -1393,12 +1474,113 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
   }
 
-  void _downloadReport() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Downloading analytics report...'),
-        backgroundColor: AppTheme.primaryLight,
-      ),
-    );
+  Future<void> _downloadReport() async {
+    try {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              SizedBox(
+                width: 4.w,
+                height: 4.w,
+                child: CircularProgressIndicator(
+                    color: Colors.white, strokeWidth: 2),
+              ),
+              SizedBox(width: 3.w),
+              Text('Generating report...'),
+            ],
+          ),
+          backgroundColor: AppTheme.primaryLight,
+          duration: Duration(seconds: 10),
+        ),
+      );
+
+      // Build report content as CSV
+      final StringBuffer csv = StringBuffer();
+      csv.writeln('PROPERTY ANALYTICS REPORT');
+      csv.writeln('Period: $selectedPeriod');
+      csv.writeln('Generated: ${DateTime.now().toString().split('.')[0]}');
+      csv.writeln('');
+      csv.writeln('SUMMARY');
+      csv.writeln('Metric,Value');
+      csv.writeln('Total Revenue,${analyticsData['totalRevenue'] ?? 0}');
+      csv.writeln('Total Properties,${analyticsData['totalProperties'] ?? 0}');
+      csv.writeln('Total Tenants,${analyticsData['totalTenants'] ?? 0}');
+      csv.writeln(
+          'Monthly Collection,${analyticsData['monthlyCollection'] ?? 0}');
+      csv.writeln('Monthly Dues,${analyticsData['monthlyDues'] ?? 0}');
+      csv.writeln('Revenue Growth,${analyticsData['revenueGrowth'] ?? '+0%'}');
+      csv.writeln('New Tenants,${analyticsData['newTenants'] ?? 0}');
+      csv.writeln('Pending Payments,${analyticsData['pendingPayments'] ?? 0}');
+      csv.writeln('Leases Expiring,${analyticsData['leasesExpiring'] ?? 0}');
+      csv.writeln(
+          'Maintenance Requests,${analyticsData['maintenanceRequests'] ?? 0}');
+
+      if (monthlyRevenue.isNotEmpty) {
+        csv.writeln('');
+        csv.writeln('MONTHLY REVENUE');
+        csv.writeln('Month,Revenue');
+        for (var row in monthlyRevenue) {
+          csv.writeln('${row['month']},${row['revenue']}');
+        }
+      }
+
+      // Save to device
+      final directory = await _getDownloadDirectory();
+      if (directory == null) {
+        throw Exception('Could not access storage');
+      }
+
+      final fileName =
+          'analytics_report_${selectedPeriod.replaceAll(' ', '_')}_${DateTime
+          .now()
+          .millisecondsSinceEpoch}.csv';
+      final file = File('${directory.path}/$fileName');
+      await file.writeAsString(csv.toString());
+
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.white),
+              SizedBox(width: 2.w),
+              Expanded(child: Text('Report saved: $fileName')),
+            ],
+          ),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 4),
+          action: SnackBarAction(
+            label: 'Open',
+            textColor: Colors.white,
+            onPressed: () async {
+              final uri = Uri.file(file.path);
+              if (await canLaunchUrl(uri)) {
+                await launchUrl(uri);
+              }
+            },
+          ),
+        ),
+      );
+    } catch (e) {
+      print('❌ Error downloading report: $e');
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to save report: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<Directory?> _getDownloadDirectory() async {
+    if (Platform.isAndroid) {
+      // Try Downloads folder first
+      final downloads = Directory('/storage/emulated/0/Download');
+      if (await downloads.exists()) return downloads;
+    }
+    // Fallback to app documents directory
+    return await getApplicationDocumentsDirectory();
   }
 }

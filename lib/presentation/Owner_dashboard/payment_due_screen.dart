@@ -51,6 +51,8 @@ class _PaymentDueScreenState extends State<PaymentDueScreen> {
       final userProvider = Provider.of<UserProvider>(context, listen: false);
       final ownerId = userProvider.userId;
 
+      print('👤 UserProvider userId: $ownerId');
+
       if (ownerId == null || ownerId.isEmpty) {
         throw Exception('User ID not found');
       }
@@ -64,13 +66,14 @@ class _PaymentDueScreenState extends State<PaymentDueScreen> {
       ).timeout(const Duration(seconds: 30));
 
       print('📥 Properties Response: ${propertiesResponse.statusCode}');
+      print('📥 Properties Body: ${propertiesResponse.body}');
 
       if (propertiesResponse.statusCode == 200) {
         final propertiesData = json.decode(propertiesResponse.body);
 
         if (propertiesData['success'] == true) {
           final properties = List<Map<String, dynamic>>.from(
-              propertiesData['properties'] ?? []
+              propertiesData['data'] ?? propertiesData['properties'] ?? []
           );
 
           // Load payment history for the owner
