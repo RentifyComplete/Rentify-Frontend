@@ -7,6 +7,7 @@ import 'dart:convert';
 import 'booking_requests_screen.dart';
 import 'payment_due_screen.dart';
 import 'maintenance_screen.dart';
+import 'lead_tracker_screen.dart';
 import 'analytics_screen.dart';
 import 'my_documents.dart';
 import '../../core/app_export.dart';
@@ -97,6 +98,13 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen>
       "icon": "analytics",
       "color": AppTheme.primaryLight,
       "route": "/analytics",
+    },
+    {
+      "title": "Leads",
+      "subtitle": "View pending requests",
+      "icon": "campaign",
+      "color": Colors.green.shade400,
+     "route": "/leads",
     },
   ];
 
@@ -1250,73 +1258,83 @@ Future<void> _handleLogout(BuildContext context) async {
   }
 
   Widget _buildQuickActions() {
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 4.w),
-      child: GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          crossAxisSpacing: 3.w,
-          mainAxisSpacing: 2.h,
-          childAspectRatio: 1.5,
+  return Padding(
+    padding: EdgeInsets.symmetric(horizontal: 4.w),
+    child: Column(
+      children: [
+        // Row 1: Bank Details + Booking Requests
+        Row(
+          children: [
+            Expanded(child: _buildSingleActionCard(ownerQuickActions[0])),
+            SizedBox(width: 3.w),
+            Expanded(child: _buildSingleActionCard(ownerQuickActions[1])),
+          ],
         ),
-        itemCount: ownerQuickActions.length,
-        itemBuilder: (context, index) {
-          final action = ownerQuickActions[index];
-          return QuickActionCardWidget(
-            title: action["title"] as String,
-            subtitle: action["subtitle"] as String,
-            iconName: action["icon"] as String,
-            color: action["color"] as Color,
-            onTap: () {
-              final route = action["route"] as String?;
+        SizedBox(height: 2.h),
+        // Row 2: Maintenance + Analytics
+        Row(
+          children: [
+            Expanded(child: _buildSingleActionCard(ownerQuickActions[2])),
+            SizedBox(width: 3.w),
+            Expanded(child: _buildSingleActionCard(ownerQuickActions[3])),
+          ],
+        ),
+        SizedBox(height: 2.h),
+        // Row 3: Leads (full width or half width)
+        Row(
+          children: [
+            Expanded(child: _buildSingleActionCard(ownerQuickActions[4])),
+            SizedBox(width: 3.w),
+            Expanded(child: SizedBox()), // empty space
+          ],
+        ),
+      ],
+    ),
+  );
+}
 
-              if (route == "/bank-details") {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const OwnerBankDetailsScreen(),
-                  ),
-                ).then((result) {
-                  if (result == true && mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Bank details saved! You can now receive tenant payments.'),
-                        backgroundColor: Colors.green,
-                        duration: Duration(seconds: 3),
-                      ),
-                    );
-                  }
-                });
-              } else if (route == "/booking-requests") {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const BookingRequestsScreen(),
-                  ),
-                );
-              } else if (route == "/maintenance") {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const MaintenanceScreen(),
-                  ),
-                );
-              } else if (route == "/analytics") {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const AnalyticsScreen(),
-                  ),
-                );
-              }
-            },
-          );
-        },
-      ),
-    );
-  }
+Widget _buildSingleActionCard(Map<String, dynamic> action) {
+  return QuickActionCardWidget(
+    title: action["title"] as String,
+    subtitle: action["subtitle"] as String,
+    iconName: action["icon"] as String,
+    color: action["color"] as Color,
+    onTap: () {
+      final route = action["route"] as String?;
+      if (route == "/bank-details") {
+        Navigator.push(context, MaterialPageRoute(
+          builder: (context) => const OwnerBankDetailsScreen(),
+        )).then((result) {
+          if (result == true && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Bank details saved! You can now receive tenant payments.'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 3),
+              ),
+            );
+          }
+        });
+      } else if (route == "/booking-requests") {
+        Navigator.push(context, MaterialPageRoute(
+          builder: (context) => const BookingRequestsScreen(),
+        ));
+      } else if (route == "/maintenance") {
+        Navigator.push(context, MaterialPageRoute(
+          builder: (context) => const MaintenanceScreen(),
+        ));
+      } else if (route == "/analytics") {
+        Navigator.push(context, MaterialPageRoute(
+          builder: (context) => const AnalyticsScreen(),
+        ));
+      } else if (route == "/leads") {
+        Navigator.push(context, MaterialPageRoute(
+          builder: (context) => const LeadTrackerScreen(),
+        ));
+      }
+    },
+  );
+}
 
   Widget _buildMyProperties() {
     if (_isLoadingProperties) {
